@@ -105,5 +105,6 @@ venv.bak/
 
 
 # custome files
-selected_data.csv
+selected_data_segments.csv
+selected_data_vertices.csv
 raw_data/
