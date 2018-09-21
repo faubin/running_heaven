@@ -22,10 +22,10 @@ class DataBuilder():
                          '?': '4',  # Queens
                          '?': '5'}  # Staten Island
         self.borough_names = {'M': 'Manhattan',
-                             '?': 'Bronx',
-                             '?': 'Brooklyn',
-                             '?': 'Queens',
-                             '?': 'Staten Island'}
+                              '?': 'Bronx',
+                              '?': 'Brooklyn',
+                              '?': 'Queens',
+                              '?': 'Staten Island'}
         self.borough_name = self.borough_names[borough]
         self.borough_code = self.boroughs[borough]
         self.borough = borough
@@ -65,12 +65,14 @@ class DataBuilder():
         r = requests.get(request)
         text = r.text[:-1]
 
-
-        #t concert string to list of dictionary safely
+        # convert string to list of dictionary safely
         tree_list = ast.literal_eval(text)
         if len(tree_list) == query_limit:
-            print('Warning: number of trees returned {0:d} is the same as the limit {1:d}'.format(len(tree_list), query_limit))
-            print('You are likely missing some trees...')
+            warn_text = 'Warning: number of trees returned '
+            warn_text += '{0:d} is the same as the '.format(len(tree_list))
+            warn_text += 'limit {0:d}'.format(len(tree_list), query_limit)
+            warn_text += 'You are likely missing some trees...'
+            print(warn_text)
         # convert to DataFrame
         df = pd.DataFrame(tree_list)
         # write data to file
@@ -105,7 +107,7 @@ class DataBuilder():
     def debug_plot(self, dfs):
         """
         """
-        fig, ax1 = pl.subplots()#figsize=(12, 12))
+        fig, ax1 = pl.subplots()
         colors = 'ybrgmc'
         for n_key, key_ in enumerate(dfs.keys()):
             dfs[key_].plot(ax=ax1, color=colors[n_key])
@@ -132,14 +134,17 @@ class DataBuilder():
         """
         drops the data outside a radius r_deg around (lon0_deg, lat0_deg)
         """
-        df['rep_x_rad'] = pd.Series([angles.deg_to_rad(df['geometry'].iloc[i].representative_point().x) for i in range(len(df.index))], index=df.index)
-        df['rep_y_rad'] = pd.Series([angles.deg_to_rad(df['geometry'].iloc[i].representative_point().y) for i in range(len(df.index))], index=df.index)
+        rep_x_rad = [angles.deg_to_rad(df['geometry'].iloc[i].representative_point().x) for i in range(len(df.index))]
+        df['rep_x_rad'] = pd.Series(rep_x_rad, index=df.index)
+        rep_y_rad = [angles.deg_to_rad(df['geometry'].iloc[i].representative_point().y) for i in range(len(df.index))]
+        df['rep_y_rad'] = pd.Series(rep_y_rad, index=df.index)
 
         lon0 = angles.deg_to_rad(pl.float64(lon0_deg))  # lambda
         lat0 = angles.deg_to_rad(pl.float64(lat0_deg))  # phi
 
         # rounding could be an issue...
-        df['diff_to_ref_rad'] = angles.angular_distance(lon0, lat0, df['rep_x_rad'], df['rep_y_rad'])
+        df['diff_to_ref_rad'] = angles.ang_dist(lon0, lat0, df['rep_x_rad'],
+                                                df['rep_y_rad'])
         invalid = angles.rad_to_deg(df['diff_to_ref_rad']) > r_deg
         df.drop(df.index[invalid], inplace=True)
 
@@ -153,7 +158,9 @@ class DataBuilder():
         lat0 = angles.deg_to_rad(pl.float64(lat0_deg))  # phi
 
         # rounding could be an issue...
-        df['diff_to_ref_rad'] = angles.angular_distance(lon0, lat0, angles.deg_to_rad(df['longitude']), angles.deg_to_rad(df['latitude']))
+        df['diff_to_ref_rad'] = angles.ang_dist(lon0, lat0,
+                                                angles.deg_to_rad(df['longitude']),
+                                                angles.deg_to_rad(df['latitude']))
         invalid = angles.rad_to_deg(df['diff_to_ref_rad']) > r_deg
         df.drop(df.index[invalid], inplace=True)
 
@@ -177,7 +184,7 @@ class DataBuilder():
         # plotting the selected data
         fig, ax1 = pl.subplots(figsize=(12, 12))
         colors = {'park': 'y', 'street': 'r', 'sidewalk': 'b'}
-        for n_key, key_ in enumerate(colors.keys()):#enumerate(dfs.keys()):
+        for n_key, key_ in enumerate(colors.keys()):
             dfs[key_].plot(ax=ax1, color=colors[key_])
         pl.plot(dfs['tree']['longitude'], dfs['tree']['latitude'],
                 '.g', markersize=2)
@@ -196,7 +203,7 @@ class DataBuilder():
         """
         # extract the important information from the segments
         data_for_df = {'lon_start': [], 'lat_start': [], 'lon_end': [],
-                       'lat_end': [], 'distance':[], 'type': [],
+                       'lat_end': [], 'distance': [], 'type': [],
                        'connections_start': [], 'connections_end': [],
                        'name_start': [], 'name_end': [],
                        'geometry': [], 'tree_number': [],
@@ -217,8 +224,7 @@ class DataBuilder():
                                                  data_for_df['lat_start'][-1]))
                 data_for_df['name_end'].append(names.lon_lat_to_name(data_for_df['lon_end'][-1], data_for_df['lat_end'][-1]))
                 data_for_df['geometry'].append(geom)
-                data_for_df['tree_number'].append(self.get_tree_density(geom, dfs['tree']))
-
+                data_for_df['tree_number'].append(self.get_tree_density(geom,dfs['tree']))
 
         for i in range(len(data_for_df['lon_start'])):
             for j in range(i+1, len(data_for_df['lon_start'])):
@@ -243,8 +249,8 @@ class DataBuilder():
         vertex-to-vertex information
         """
         vertices = {'vertex_start': [], 'vertex_end': [], 'distance': [],
-                    'type': [], 'geometry': [], 'tree_number': [],}
-                    #'park_weight': []}
+                    'type': [], 'geometry': [], 'tree_number': [], }
+#                     'park_weight': []}
 
         # loop over all the segments
         for i in range(len(data['type'])):
@@ -264,8 +270,7 @@ class DataBuilder():
                     else:
                         raise ValueError('Problem!!!')
 
-                    #pdb.set_trace()
-                    #is_defined = len(pl.where((pl.array(vertices["vertex_start"]) == name1) & (pl.array(vertices['vertex_end']) == name2))[0])
+                    # find if the vertex is already defined
                     is_defined1 = pl.array(vertices["vertex_start"] == name1)
                     is_defined2 = pl.array(vertices['vertex_end'] == name2)
                     is_defined = pl.logical_and(is_defined1, is_defined2)
@@ -297,7 +302,9 @@ class DataBuilder():
         raw_data_dfs = self.load_raw_data()
         data_dfs = self.select_data_for_debug(raw_data_dfs)
         # self.debug_plot(data_dfs)
-        data_dfs = self.zoom_on_data(data_dfs, -73.97, 40.77, 0.01)  # zoom on central park
+
+        # zoom on central park
+        data_dfs = self.zoom_on_data(data_dfs, -73.97, 40.77, 0.01)
         # self.plot_data(data_dfs)
 
         for key_ in data_dfs.keys():
@@ -315,4 +322,3 @@ class DataBuilder():
 if __name__ == "__main__":
     app = DataBuilder()
     app.run()
-
