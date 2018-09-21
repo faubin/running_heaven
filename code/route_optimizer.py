@@ -7,16 +7,16 @@ import pylab as pl
 import names
 import angles
 import locations
-import build_data_source as bd
 import pdb
 
 
 class RunRouteOptimizer():
     """
     """
-    def __init__(self, borough='M'):
+    def __init__(self, show=True, borough='M'):
         """
         """
+        self.show = show
         return
 
 
@@ -153,7 +153,7 @@ class RunRouteOptimizer():
             ret.append(weight)
         return ret
 
-    def run(self):
+    def run(self, pt1, pt2, target_dist_deg):
         """
         """
         new_df2 = gpd.read_file('route_connections.geojson')
@@ -168,16 +168,14 @@ class RunRouteOptimizer():
 
         #pt1 = locations.get_closest_point_to(-73.978, 40.778, intersection_names)
         #pt2 = locations.get_closest_point_to(-73.967, 40.767, intersection_names)
-        pt1 = locations.get_closest_point_to(-73.967, 40.763, intersection_names)
-        pt2 = locations.get_closest_point_to(-73.963, 40.772, intersection_names)
+        pt1_lon, pt1_lat = names.name_to_lon_lat(pt1)
+        pt2_lon, pt2_lat = names.name_to_lon_lat(pt2)
+        start_point = locations.get_closest_point_to(pt1_lon, pt1_lat,
+                                                     intersection_names)
+        end_point = locations.get_closest_point_to(pt2_lon, pt2_lat,
+                                                   intersection_names)
         #pt2 = locations.get_closest_point_to(-73.966, 40.765, intersection_names)
-
-        start_point = pt1
-        end_point = pt2
         print(pt1, pt2)
-
-        target_dist_deg = 0.011  # shortest distance east of Central Park
-        target_dist_deg += 0.005
 
         tree_density_norm = new_df2['tree_number'] / max(new_df2['tree_number'])
 
@@ -273,10 +271,18 @@ class RunRouteOptimizer():
 
         pl.savefig('path_run.png')
         pl.savefig('../app/flaskexample/static/path_run.png')
-        pl.show()
-        return
+        if self.show:
+            pl.show()
+        return new_gdf2_path["distance"].sum()
 
 if __name__ == "__main__":
-    app = RunRouteOptimizer()
-    app.run()
+    #pt1 = locations.get_closest_point_to(-73.978, 40.778, intersection_names)
+    #pt2 = locations.get_closest_point_to(-73.967, 40.767, intersection_names)
+    pt1 = '-73.967_40.763'
+    pt2 = '-73.963_40.772'
+    #pt2 = locations.get_closest_point_to(-73.966, 40.765, intersection_names)
 
+    target_dist_deg = 0.011  # shortest distance east of Central Park
+    target_dist_deg += 0.005
+    app = RunRouteOptimizer()
+    d = app.run(pt1, pt2, target_dist_deg)
