@@ -153,6 +153,26 @@ class RunRouteOptimizer():
             ret.append(weight)
         return ret
 
+    def feature_distributions(self, tree_density_norm, park_weight):
+        """
+        Plots the distributions of features
+        """
+        pl.figure(1)
+        pl.subplot(311)
+        pl.hist(tree_density_norm)
+        pl.ylabel('Count')
+        pl.xlabel('# trees per segment / max(# trees per segment)')
+        pl.xlim([0., 1.])
+        pl.subplot(313)
+        pl.hist(park_weight)
+        pl.ylabel('Count')
+        pl.xlabel('Distance to nearest park / run length target')
+        pl.xlim([0., 1.])
+        pl.savefig('distributions.png')
+        pl.close(1)
+        return
+
+
     def run(self, pt1, pt2, target_dist_deg):
         """
         """
@@ -177,6 +197,7 @@ class RunRouteOptimizer():
         #pt2 = locations.get_closest_point_to(-73.966, 40.765, intersection_names)
         print(pt1, pt2)
 
+        print('=============== Use density ===============')
         tree_density_norm = new_df2['tree_number'] / max(new_df2['tree_number'])
 
         dfs = {}
@@ -189,11 +210,7 @@ class RunRouteOptimizer():
         #park_df = park_df['park']
         park_weight = self.define_park_weight(new_df2, dfs['park'], target_dist_deg)
 
-        pl.figure(1)#, figsize=(12, 12))
-        pl.subplot(221)
-        pl.hist(tree_density_norm)
-        pl.subplot(222)
-        pl.hist(park_weight)
+        # self.feature_distributions(tree_density_norm, park_weight)
 
         edges = []
         for i in range(len(new_df2.index)):

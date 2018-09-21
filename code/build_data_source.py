@@ -176,15 +176,18 @@ class DataBuilder():
         """
         # plotting the selected data
         fig, ax1 = pl.subplots(figsize=(12, 12))
-        colors = 'ybrgmc'
-        for n_key, key_ in enumerate(dfs.keys()):
-            dfs[key_].plot(ax=ax1, color=colors[n_key])
+        colors = {'park': 'y', 'street': 'r', 'sidewalk': 'b'}
+        for n_key, key_ in enumerate(colors.keys()):#enumerate(dfs.keys()):
+            dfs[key_].plot(ax=ax1, color=colors[key_])
+        pl.plot(dfs['tree']['longitude'], dfs['tree']['latitude'],
+                '.g', markersize=2)
 
         pl.xlabel('Longitude ($^o$)', fontsize=20)
         pl.ylabel('Latitude ($^o$)', fontsize=20)
         pl.xticks(fontsize=16)
         pl.yticks(fontsize=16)
         pl.title('NYC Map of Running Areas', fontsize=20)
+        pl.savefig('data_central_park.png')
         pl.show()
         return
 
@@ -293,7 +296,7 @@ class DataBuilder():
         """
         raw_data_dfs = self.load_raw_data()
         data_dfs = self.select_data_for_debug(raw_data_dfs)
-        #self.debug_plot(data_dfs)
+        # self.debug_plot(data_dfs)
         data_dfs = self.zoom_on_data(data_dfs, -73.97, 40.77, 0.01)  # zoom on central park
         # self.plot_data(data_dfs)
 
