@@ -8,6 +8,7 @@ import requests
 import angles
 import names
 import pdb
+import time
 
 
 class DataBuilder():
@@ -50,7 +51,7 @@ class DataBuilder():
         print('Done loading data')
         return raw_dfs
 
-    def load_tree_data(self):
+    def load_tree_data(self, query_limit=25000):
         """
         To do: load all trees iteratively, and add them to the proper segment
         """
@@ -58,25 +59,34 @@ class DataBuilder():
         #     https://dev.socrata.com/consumers/getting-started.html)
         # see https://dev.socrata.com/docs/queries/offset.html for how to
         #     offset and get the whole list
-        query_limit = 25000  # absolute limit is 50 000
-        request = 'https://data.cityofnewyork.us/resource/5rq2-4hqu.json'
-        request += '?boroname={0:s}'.format(self.borough_name)
-        request += '&$limit={0:d}'.format(query_limit)
-        r = requests.get(request)
-        text = r.text[:-1]
+        #query_limit = 25000  # absolute limit is 50 000
 
-        # convert string to list of dictionary safely
-        tree_list = ast.literal_eval(text)
-        if len(tree_list) == query_limit:
-            warn_text = 'Warning: number of trees returned '
-            warn_text += '{0:d} is the same as the '.format(len(tree_list))
-            warn_text += 'limit {0:d}'.format(len(tree_list), query_limit)
-            warn_text += 'You are likely missing some trees...'
-            print(warn_text)
+        # query loop until receiving all the trees
+        i = 0
+        done = False
+        tree_list = []
+        while not done:
+            # request
+            request = 'https://data.cityofnewyork.us/resource/5rq2-4hqu.json'
+            request += '?boroname={0:s}'.format(self.borough_name)
+            request += '&$limit={0:d}'.format(query_limit)
+            request += '&$offset={0:d}'.format(i*query_limit)
+            r = requests.get(request)
+            text = r.text[:-1]
+
+            # convert string to list of dictionary safely
+            query_result_list = ast.literal_eval(text)
+            tree_list += query_result_list
+
+            # when less tree than the query limit, we're done
+            if not len(query_result_list) == query_limit:
+                done = True
+            i += 1
+
         # convert to DataFrame
         df = pd.DataFrame(tree_list)
+
         # write data to file
-        # borough_df4.to_csv('raw_data/Tree_{0:s}.csv'.format(borough))
         str_to_float_list = ['longitude', 'latitude']
         df[str_to_float_list] = df[str_to_float_list].astype(float)
         return df
@@ -95,13 +105,28 @@ class DataBuilder():
         inside = (df['longitude'] - x0)**2 + (df['latitude']-y0)**2 <= r2
         return inside.sum()
 
-    def select_data_for_debug(self, dfs):
+    def select_data_for_borough(self, dfs):
         """
+        only keepds the data in a borough for streets and parks
+        for sidewalks, there is no borough information in the data
+        so the sidewalks within some (lon, lat) are kept -> not ideal...
         """
         dfs['park'] = dfs['park'].loc[dfs['park']['borough'] == self.borough]
-        # remove me after debugging
-        if 'street' in dfs.keys():
-            dfs['street'] = dfs['street'].loc[dfs['street']['borocode'] == self.borough_code]
+        dfs['street'] = dfs['street'].loc[dfs['street']['borocode'] == self.borough_code]
+
+        # sidewalks
+        if self.borough == 'M':
+            index_to_drop = []
+            for i in dfs['sidewalk'].index.values:
+                geom = dfs['sidewalk']['geometry'].iloc[i]
+                x0 = geom.representative_point().x
+                y0 = geom.representative_point().y
+                if x0 < -74.036 or x0 > -73.906 or y0 < 40.678 or y0 > 40.881:
+                    index_to_drop.append(i)
+        else:
+            exit('Borough data selection failed. Only implemented for M')
+        dfs['sidewalk'].drop(index_to_drop, inplace=True)
+
         return dfs
 
     def debug_plot(self, dfs):
@@ -130,7 +155,7 @@ class DataBuilder():
         pl.show()
         return
 
-    def select_data(self, df, lon0_deg, lat0_deg, r_deg):
+    def select_data(self, df, lon0_deg, lat0_deg, r_deg, exclude_data):
         """
         drops the data outside a radius r_deg around (lon0_deg, lat0_deg)
         """
@@ -145,12 +170,13 @@ class DataBuilder():
         # rounding could be an issue...
         df['diff_to_ref_rad'] = angles.ang_dist(lon0, lat0, df['rep_x_rad'],
                                                 df['rep_y_rad'])
-        invalid = angles.rad_to_deg(df['diff_to_ref_rad']) > r_deg
-        df.drop(df.index[invalid], inplace=True)
 
+        if exclude_data:
+            invalid = angles.rad_to_deg(df['diff_to_ref_rad']) > r_deg
+            df.drop(df.index[invalid], inplace=True)
         return df
 
-    def select_data_pts(self, df, lon0_deg, lat0_deg, r_deg):
+    def select_data_pts(self, df, lon0_deg, lat0_deg, r_deg, exclude_data):
         """
         drops the data outside a radius r_deg around (lon0_deg, lat0_deg)
         """
@@ -161,21 +187,22 @@ class DataBuilder():
         df['diff_to_ref_rad'] = angles.ang_dist(lon0, lat0,
                                                 angles.deg_to_rad(df['longitude']),
                                                 angles.deg_to_rad(df['latitude']))
-        invalid = angles.rad_to_deg(df['diff_to_ref_rad']) > r_deg
-        df.drop(df.index[invalid], inplace=True)
 
+        if exclude_data:
+            invalid = angles.rad_to_deg(df['diff_to_ref_rad']) > r_deg
+            df.drop(df.index[invalid], inplace=True)
         return df
 
-    def zoom_on_data(self, dfs, lon0_deg, lat0_deg, r_deg):
+    def zoom_on_data(self, dfs, lon0_deg, lat0_deg, r_deg, exclude_data):
         """
         """
         for key_ in dfs.keys():
             if key_ == 'tree':
                 dfs[key_] = self.select_data_pts(dfs[key_], lon0_deg, lat0_deg,
-                                                 r_deg)
+                                                 r_deg, exclude_data)
             else:
                 dfs[key_] = self.select_data(dfs[key_], lon0_deg, lat0_deg,
-                                             r_deg)
+                                             r_deg, exclude_data)
         return dfs
 
     def plot_data(self, dfs):
@@ -198,7 +225,7 @@ class DataBuilder():
         pl.show()
         return
 
-    def extract_info_from_df(self, dfs):
+    def extract_segments_from_df(self, dfs):
         """
         """
         # extract the important information from the segments
@@ -212,7 +239,11 @@ class DataBuilder():
         for key_ in ['sidewalk', 'street']:
             for i in range(len(dfs[key_].index)):
                 geom = dfs[key_]['geometry'].iloc[i]
-                data_for_df['lon_start'].append(geom.boundary[0].x)
+                try:
+                    data_for_df['lon_start'].append(geom.boundary[0].x)
+                except IndexError:
+                    print('skipping', key_, i)
+                    continue
                 data_for_df['lat_start'].append(geom.boundary[0].y)
                 data_for_df['lon_end'].append(geom.boundary[1].x)
                 data_for_df['lat_end'].append(geom.boundary[1].y)
@@ -271,8 +302,8 @@ class DataBuilder():
                         raise ValueError('Problem!!!')
 
                     # find if the vertex is already defined
-                    is_defined1 = pl.array(vertices["vertex_start"] == name1)
-                    is_defined2 = pl.array(vertices['vertex_end'] == name2)
+                    is_defined1 = pl.array(vertices["vertex_start"]) == name1
+                    is_defined2 = pl.array(vertices['vertex_end']) == name2
                     is_defined = pl.logical_and(is_defined1, is_defined2)
                     is_defined = len(pl.where(is_defined)[0])
 
@@ -284,37 +315,90 @@ class DataBuilder():
                         vertices['tree_number'].append(data['tree_number'][j])
                         vertices['type'].append(data['type'][j])
                         vertices['geometry'].append(data['geometry'][j])
+        # === write function to add tree numbers
         return vertices
 
     def write_data_to_file(self, data_dict):
         """
         """
         columns = ['vertex_start', 'vertex_end', 'distance', 'type',
-                   'geometry', 'tree_number']
+                   'geometry', 'tree_number', 'tree_density',
+                   'min_dist_to_park']
         df = pd.DataFrame(data_dict, columns=columns)
         df = gpd.GeoDataFrame(df)
-        df.to_file("route_connections.geojson")
+        df.to_file("processed/route_connections.geojson")
         return
+
+    def write_processed_data_to_file(self, dfs):
+        """
+        write data to file for plotting when optimizing routes
+        """
+        if not 'processed' in os.listdir('.'):
+            os.mkdir('processed')
+        for key_ in dfs.keys():
+            if key_ == 'tree':
+                file_name = os.path.join('processed',
+                                         '{0:s}.csv'.format(key_))
+                dfs[key_].to_csv(file_name)
+            else:
+                file_name = os.path.join('processed',
+                                         '{0:s}.geojson'.format(key_))
+                dfs[key_].to_file(file_name)
+        return
+
+    def add_weights(self, dict_, dfs):
+        """
+        """
+        # relative tree density
+        dict_['tree_density'] = pl.array(dict_['tree_number']).astype(float)
+        dict_['tree_density'] /= pl.array(dict_['distance'])
+        dict_['tree_density'] /= max(dict_['tree_density'])
+        # tree density defined as 1 in parks since no tree data there
+        is_sidewalk = pl.array(dict_['type']) == 'sidewalk'
+        dict_['tree_density'][is_sidewalk] = 1.
+
+        dict_['min_dist_to_park'] = []
+        for i in range(len(dict_['vertex_start'])):
+            # mean location of the segment
+            lon = dict_['geometry'][i].representative_point().x
+            lat = dict_['geometry'][i].representative_point().y
+
+            # distance park - segment
+            dist = angles.ang_dist(lon, lat,
+                                   angles.rad_to_deg(dfs['park']['rep_x_rad']),
+                                   angles.rad_to_deg(dfs['park']['rep_y_rad']))
+            dist = min(dist)
+
+            ##  weight is quadratic from the park with value of 1 at target
+            ## distance with 0 at park
+            #weight = (dost / target_d)**0.5  # **2
+            ## select closest park
+            #weight = min(weight)
+            ## calue is topped to 1
+            #if weight > 1.:
+            #    weight = 1.
+            dict_['min_dist_to_park'].append(dist)
+        return dict_
+
 
     def run(self):
         """
+        Takes 20 minutes for Manhattan
         """
         raw_data_dfs = self.load_raw_data()
-        data_dfs = self.select_data_for_debug(raw_data_dfs)
+        data_dfs = self.select_data_for_borough(raw_data_dfs)
         # self.debug_plot(data_dfs)
 
-        # zoom on central park
-        data_dfs = self.zoom_on_data(data_dfs, -73.97, 40.77, 0.01)
+        # include only data around central park for debugging
+        # data_dfs = self.zoom_on_data(data_dfs, -73.97, 40.77, 0.01, False)
+        data_dfs = self.zoom_on_data(data_dfs, -73.97, 40.77, 0.01, True)
         # self.plot_data(data_dfs)
 
-        for key_ in data_dfs.keys():
-            if key_ == 'tree':
-                data_dfs[key_].to_csv("{0:s}_processed.csv".format(key_))
-            else:
-                data_dfs[key_].to_file("{0:s}_processed.geojson".format(key_))
+        self.write_processed_data_to_file(data_dfs)
 
-        data_dict = self.extract_info_from_df(data_dfs)
+        data_dict = self.extract_segments_from_df(data_dfs)
         conn_dict = self.convert_segments_to_vertex(data_dict)
+        conn_dict = self.add_weights(conn_dict, data_dfs)
         self.write_data_to_file(conn_dict)
         return
 
