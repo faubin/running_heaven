@@ -51,23 +51,35 @@ class RunRouteOptimizer():
                 theta_pt = locations.get_angle(lon_current, lat_current, lon,
                                                lat)
                 theta_diff = theta_end - theta_pt
+                d_direct = angles.ang_dist(lon_current, lat_current, lon,
+                                           lat)
+                dist_left = target_d - new_dist
 
                 # cost function increases as run ends and is directed towards
                 # the end point, has lower cost towards the end point
                 # r_factor should be between 0 (start, new_dist=0) and
                 # 1 (end, new_dist=target_d) if new_dist < target_d:
                 if new_dist < target_d:
-                    r_factor = (target_d - new_dist) / target_d
+                    r_factor = dist_left / target_d
                 else:
                     r_factor = 1.
-                cost_dist = (1. - r_factor)**2
-                cost_dist *= ((1. + pl.cos(pl.pi+theta_diff))/2.)**2
+                # no cost as long as we have not reached the proper length
+                if dist_left > d_direct:
+                    cost_dist = 0.
+                else:
+                    cost_dist = (1. - r_factor)**2
+                    cost_dist *= ((1. + pl.cos(pl.pi+theta_diff))/2.)**2
+
+                # spiral term when far
+                cost_dist2 = (r_factor)**2
+                # cost_dist2 *= ((1. + pl.cos(2.*theta_diff))/2.)**2
+                cost_dist2 *= ((1. + pl.cos(theta_diff))/2.)**2
 
                 # tree weight
                 cost_tree = (r_factor)**2 * (temp[2]['tree_density_weight'])**2
                 # less cost for routes towards parks
                 cost_park = (r_factor)**2 * temp[2]['park_weight']**2
-                cost_terms = [cost_dist, cost_tree, cost_park]
+                cost_terms = [cost_dist, cost_dist2, cost_tree, cost_park]
 
                 temp[0] = copy.deepcopy(pl.sum(cost_terms))
                 object_[key_][i] = temp
@@ -124,32 +136,16 @@ class RunRouteOptimizer():
 
         return float("inf")
 
-    def define_park_weight(self, df1, df2, target_d):
+    # def define_park_weight(self, df1, df2, target_d):
+    def define_park_weight(self, df, target_d):
         """
         """
         ret = []
-        for i in range(len(df1.index)):
-            # mean location of the segment
-            lon1, lat1 = names.name_to_lon_lat(df1['vertex_start'].iloc[i])
-            lon2, lat2 = names.name_to_lon_lat(df1['vertex_end'].iloc[i])
-            lon = pl.mean([lon1, lon2])
-            lat = pl.mean([lat1, lat2])
-
-            # distance park - segment
-            d_to_parks = angles.ang_dist(lon, lat,
-                                         angles.rad_to_deg(df2['rep_x_rad']),
-                                         angles.rad_to_deg(df2['rep_y_rad']))
-
-            #  weight is quadratic from the park with value of 1 at target
-            # distance with 0 at park
-            weight = (d_to_parks / target_d)**0.5  # **2
-            # select closest park
-            weight = min(weight)
-            # calue is topped to 1
-            if weight > 1.:
-                weight = 1.
-            ret.append(weight)
-        return ret
+        weight = (df['min_dist_to_park'] / target_d)**0.5  # **2
+        #weight = (df['min_dist_to_park'] / target_d)**1.0  # **2
+        #weight = (df['min_dist_to_park'] / target_d)**2.0  # **2
+        weight.loc[weight > 1.] = 1.
+        return weight
 
     def feature_distributions(self, tree_density_norm, park_weight):
         """
@@ -193,9 +189,9 @@ class RunRouteOptimizer():
         pl.plot(lon_end, lat_end, 'oc', markersize=12)
 
         # black dot on all intersections
-        for i in intersection_names:
-            lon, lat = names.name_to_lon_lat(i)
-            pl.plot(lon, lat, '.k')
+        # for i in intersection_names:
+        #     lon, lat = names.name_to_lon_lat(i)
+        #     pl.plot(lon, lat, '.k')
 
         # plotting the route
         new_gdf2 = gpd.GeoDataFrame(new_df2)
@@ -203,17 +199,66 @@ class RunRouteOptimizer():
         new_gdf2_path.plot(ax=ax2, color='k', linewidth=4)
         pl.savefig('path_run.png')
         pl.savefig('../app/flaskexample/static/path_run.png')
+        return
 
-        return new_gdf2_path["distance"].sum()
-
-
-
-    def run(self, pt1, pt2, target_dist_deg):
+    def find_vertex_index(self, df, pt1, pt2):
         """
         """
-        new_df2 = gpd.read_file('route_connections.geojson')
+        ind = df["vertex_start"] == pt1
+        ind &= df['vertex_end'] == pt2
+        ind = pl.where(ind)[0]
+        return ind
+
+    def get_indices_from_path(self, path, start_pt, df):
+        """
+        """
+        dist = path[2]
+        path = path[1]
+        prev_pt = None
+        path_indices = []
+        while not path[0] == start_pt:
+            # nothing to do for first vertex
+            if prev_pt is not None:
+                ind = self.find_vertex_index(df, prev_pt, path[0])
+                if len(ind) > 1:
+                    print('problem with selecting path', ind)
+                path_indices.append(ind[0])
+
+            # update values for next loop
+            prev_pt = copy.deepcopy(path[0])
+            path = path[1]
+        ind = self.find_vertex_index(df, prev_pt, path[0])
+        if len(ind) > 1:
+            print('problem with selecting path', ind)
+        path_indices.append(ind[0])
+        return path_indices, dist
+
+    def convert_distance_to_physical(self, d, units):
+        """
+        Radius of the Earth is 6371 km
+        Adding a calibration factor from google map
+        (https://www.google.com/maps/dir/Lexington+Ave+%26+E+61st+St,+New+York,+NY+10065/Park+Ave+%26+E+73rd+St,+New+York,+NY+10021/@40.7676217,-73.9701548,16z/data=!3m1!4b1!4m29!4m28!1m20!1m1!1s0x89c258ef6f253e81:0xc63aaaefe619a028!2m2!1d-73.9672732!2d40.763483!3m4!1m2!1d-73.9670875!2d40.7641824!3s0x89c258ef0e376ec5:0x684920ca0dae693c!3m4!1m2!1d-73.9670561!2d40.7658053!3s0x89c258eedd47f62f:0xbc3a1f4edbac2d31!3m4!1m2!1d-73.9648687!2d40.7674145!3s0x89c258ec0082592f:0x2c3535f29e0f6140!1m5!1m1!1s0x89c258eb33cd4015:0x777eea69b117a3c3!2m2!1d-73.9632455!2d40.7717443!3e2)
+        This factor is 1.5567 km / 1.4000 km = 1.1119
+        There is 0.621371 mile in a km
+        """
+        if units not in ['km', 'miles']:
+            raise ValueError('Units must me "km" or "miles"')
+
+        d = angles.deg_to_rad(d)
+        if units == 'km':
+            d *= (6371. / 1.1119)
+        else:
+            d *= (6371. / 1.1119) * 0.621371
+        return d
+
+    def run(self, pt1, pt2, target_dist_deg, units='km'):
+        """
+        """
+        new_df2 = gpd.read_file('processed/route_connections.geojson')
         new_df2.rename(index=str, columns={'vertex_sta': 'vertex_start',
-                                           'tree_numbe': 'tree_number'},
+                                           'tree_numbe': 'tree_number',
+                                           'tree_densi': 'tree_density',
+                                           'min_dist_t': 'min_dist_to_park'},
                        inplace=True)
 
         # list of all possible intersections
@@ -230,20 +275,24 @@ class RunRouteOptimizer():
                                                    intersection_names)
         print("Optimizing route from {0:s} to {1:s}".format(pt1, pt2))
 
-        print('=============== Use density ===============')
-        tree_density_norm = 1. - new_df2['tree_number'] / max(new_df2['tree_number'])
+        # tree weight
+        tree_density_weight = 1. -  new_df2['tree_density']
 
         # load data for plotting
         dfs = {}
         for key_ in ['park', 'street', 'sidewalk']:
-            dfs[key_] = gpd.read_file('{0:s}_processed.geojson'.format(key_))
-        dfs['tree'] = pd.read_csv('tree_processed.csv')
-        park_weight = self.define_park_weight(new_df2, dfs['park'],
+            print(key_)
+            dfs[key_] = gpd.read_file('processed/{0:s}.geojson'.format(key_))
+        print('tree')
+        dfs['tree'] = pd.read_csv('processed/tree.csv')
+        print('tree_weights')
+        park_weight = self.define_park_weight(new_df2,# dfs['park'],
                                               target_dist_deg)
 
         # distribution of features for debugging
         # self.feature_distributions(tree_density_norm, park_weight)
 
+        print('optimization setup')
         # problem information for Dijkstra's algorithm
         edges = []
         for i in range(len(new_df2.index)):
@@ -252,45 +301,36 @@ class RunRouteOptimizer():
                           new_df2['vertex_end'].iloc[i],  # end point
                           0.,  # cost, updated automatically
                           {'distance': new_df2['distance'].iloc[i],
-                           'tree_density_weight': tree_density_norm.iloc[i],
+                           'tree_density_weight': tree_density_weight[i],
                            'park_weight': park_weight[i],
                            }
                           ))
 
+        print('optimization')
         # optimizing path
         opt_path = self.dijkstra(edges, start_point, end_point,
                                  target_dist_deg)
         print(opt_path)
 
-        # plot the route (straight lines instead of actual geometry)
-        xx = copy.deepcopy(opt_path[1])
-        prev_pt = None
-        path_indices = []
-        try:
-            while True:
-                pl.plot(float(xx[0].split('_')[0]), float(xx[0].split('_')[1]),
-                        'ok')
-                if prev_pt is not None:
-                    ind = new_df2["vertex_start"] == prev_pt
-                    ind &= new_df2['vertex_end'] == xx[0]
-                    ind = pl.where(ind)[0]
-                    if len(ind) > 1:
-                        print('problem with selecting path', ind)
-                    path_indices.append(ind[0])
-
-                prev_pt = copy.deepcopy(xx[0])
-                xx = copy.deepcopy(xx[1])
-        except IndexError:
-            pass
+        print('extracting path')
+        # get indices from path
+        path_indices, d_path = self.get_indices_from_path(opt_path, start_point,
+                                                          new_df2)
         print(path_indices)
 
+        print('plotting')
         # plotting the data and route
-        d_path = self.plot_route(dfs, intersection_names, start_point,
-                                 end_point, new_df2, path_indices)
+        self.plot_route(dfs, intersection_names, start_point, end_point,
+                        new_df2, path_indices)
 
         # resulting distance
         print('Total distance is : {0:f} degrees'.format(d_path))
         print('Taget distance was: {0:f} degrees'.format(target_dist_deg))
+        d_path_physical = self.convert_distance_to_physical(d_path, units)
+        print('Total distance is : {0:f} {1:s}'.format(d_path_physical, units))
+        d_path_target = self.convert_distance_to_physical(target_dist_deg,
+                                                          units)
+        print('Taget distance was: {0:f} {1:s}'.format(d_path_target, units))
 
         if self.show:
             pl.show()
@@ -299,10 +339,18 @@ class RunRouteOptimizer():
 
 if __name__ == "__main__":
     # pt1, pt2 = (-73.978, 40.778, -73.967, 40.767)
+
+    # pt1 = Lexington Ave & E 61st St, New York, NY 10065
+    # pt2 = Park Ave & E 79th St, New York, NY 10075
     pt1, pt2 = ('-73.967_40.763', '-73.963_40.772')
+    # pt2, pt1 = ('-73.967_40.763', '-73.963_40.772')
 
     target_dist_deg = 0.011  # shortest distance east of Central Park
     target_dist_deg += 0.005
+    target_dist_deg *= 2.
+
+    units = 'km'
+    # units = 'miles'
 
     app = RunRouteOptimizer()
     d = app.run(pt1, pt2, target_dist_deg)
