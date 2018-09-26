@@ -75,13 +75,17 @@ class DataBuilder():
             text = r.text[:-1]
 
             # convert string to list of dictionary safely
-            query_result_list = ast.literal_eval(text)
+            try:
+                query_result_list = ast.literal_eval(text)
+            except ValueError:
+                exit('There was an error downloading the tree data. Retry.')
             tree_list += query_result_list
 
             # when less tree than the query limit, we're done
             if not len(query_result_list) == query_limit:
                 done = True
             i += 1
+            time.sleep(5)
 
         # convert to DataFrame
         df = pd.DataFrame(tree_list)
@@ -100,7 +104,9 @@ class DataBuilder():
         y1 = geom.boundary[0].y
         x2 = geom.boundary[1].x
         y2 = geom.boundary[1].y
-        r2 = ((x2-x1)**2 + (y2-y1)**2) / 4.
+        # r2 = ((x2-x1)**2 + (y2-y1)**2) / 4.
+        r2 = 0.0008212487130291317**2
+        #print(((x2-x1)**2 + (y2-y1)**2) / 4. )
 
         inside = (df['longitude'] - x0)**2 + (df['latitude']-y0)**2 <= r2
         return inside.sum()
@@ -236,6 +242,7 @@ class DataBuilder():
                        'geometry': [], 'tree_number': [],
                        # 'park_weight': [],
                        }
+        print('Warning: radius for tree is hardcoded in get_tree_density().')
         for key_ in ['sidewalk', 'street']:
             for i in range(len(dfs[key_].index)):
                 geom = dfs[key_]['geometry'].iloc[i]
@@ -304,7 +311,13 @@ class DataBuilder():
                     # find if the vertex is already defined
                     is_defined1 = pl.array(vertices["vertex_start"]) == name1
                     is_defined2 = pl.array(vertices['vertex_end']) == name2
-                    is_defined = pl.logical_and(is_defined1, is_defined2)
+                    is_definedx = pl.logical_and(is_defined1, is_defined2)
+
+                    # find if the vertex is already defined
+                    is_defined1 = pl.array(vertices["vertex_start"]) == name2
+                    is_defined2 = pl.array(vertices['vertex_end']) == name1
+                    is_definedy = pl.logical_and(is_defined1, is_defined2)
+                    is_defined = pl.logical_or(is_definedx, is_definedy)
                     is_defined = len(pl.where(is_defined)[0])
 
                     # stores the path informations
@@ -349,13 +362,47 @@ class DataBuilder():
     def add_weights(self, dict_, dfs):
         """
         """
+        is_sidewalk = pl.array(dict_['type']) == 'sidewalk'
+        is_street = pl.array(dict_['type']) == 'street'
+
         # relative tree density
         dict_['tree_density'] = pl.array(dict_['tree_number']).astype(float)
         dict_['tree_density'] /= pl.array(dict_['distance'])
-        dict_['tree_density'] /= max(dict_['tree_density'])
+
+        # sidewalks wet to maximum
+        max_density = max(dict_['tree_density'])
+        #dict_['tree_density'][is_sidewalk] = max_density
+
+        pl.subplot(211)
+        pl.hist(dict_['tree_density'])
+        pl.subplot(212)
+        pl.hist(dict_['tree_density'][is_street])
+        pl.show()
+        pdb.set_trace()
+
+        # dict_['tree_density'] /= max(dict_['tree_density'])
+        dict_['tree_density'] /= pl.percentile(dict_['tree_density'][is_street], 85.)
+        pl.hist(dict_['tree_density'], bins=pl.arange(0., 1.5, 0.05))
+        pl.show()
+        pdb.set_trace()
+
+        # randomize weight of sidewalks
+        dict_['tree_density'][is_sidewalk] = 0.75+0.15*pl.randn(len(dict_['tree_density'][is_sidewalk]))
+        dict_['tree_density'][dict_['tree_density'] > 1.] = 1.
+        # randomize streets with 0 trees
+        zero_tree = pl.array(dict_['tree_number']) == 0
+        dict_['tree_density'][zero_tree] = 0.25+0.15*pl.randn(sum(zero_tree))
+
+
         # tree density defined as 1 in parks since no tree data there
-        is_sidewalk = pl.array(dict_['type']) == 'sidewalk'
-        dict_['tree_density'][is_sidewalk] = 1.
+        dict_['tree_density'][dict_['tree_density'] > 0.999] = 0.999
+        dict_['tree_density'][dict_['tree_density'] < 0.] = 0.
+        pl.hist(dict_['tree_density'], bins=pl.arange(0., 1.5, 0.05))
+        pl.show()
+        pdb.set_trace()
+        #dict_['tree_density'] *= 2.
+        #dict_['tree_density'][is_sidewalk] = -1.
+        #pdb.set_trace()
 
         dict_['min_dist_to_park'] = []
         for i in range(len(dict_['vertex_start'])):
@@ -368,15 +415,6 @@ class DataBuilder():
                                    angles.rad_to_deg(dfs['park']['rep_x_rad']),
                                    angles.rad_to_deg(dfs['park']['rep_y_rad']))
             dist = min(dist)
-
-            ##  weight is quadratic from the park with value of 1 at target
-            ## distance with 0 at park
-            #weight = (dost / target_d)**0.5  # **2
-            ## select closest park
-            #weight = min(weight)
-            ## calue is topped to 1
-            #if weight > 1.:
-            #    weight = 1.
             dict_['min_dist_to_park'].append(dist)
         return dict_
 
@@ -391,15 +429,40 @@ class DataBuilder():
 
         # include only data around central park for debugging
         # data_dfs = self.zoom_on_data(data_dfs, -73.97, 40.77, 0.01, False)
-        data_dfs = self.zoom_on_data(data_dfs, -73.97, 40.77, 0.01, True)
+        # central park, small
+        # data_dfs = self.zoom_on_data(data_dfs, -73.97, 40.77, 0.01, True)
+        # central park, big
+        # data_dfs = self.zoom_on_data(data_dfs, -73.97, 40.77, 0.02, True)
+
+        # data_dfs = self.zoom_on_data(data_dfs, -73.994, 40.740, 0.01, False)
+        # data_dfs = self.zoom_on_data(data_dfs, -73.994, 40.740, 0.01, True)
         # self.plot_data(data_dfs)
+
+        # south manhattan
+        data_dfs = self.zoom_on_data(data_dfs, -73.99, 40.73, 0.02, True)
+
 
         self.write_processed_data_to_file(data_dfs)
 
+        print('Converting data to segments')
         data_dict = self.extract_segments_from_df(data_dfs)
+        print('Getting connections from segments')
         conn_dict = self.convert_segments_to_vertex(data_dict)
+        print('Adding weights')
         conn_dict = self.add_weights(conn_dict, data_dfs)
+        print('writing connections to file')
         self.write_data_to_file(conn_dict)
+
+        # checking for duplicates
+        for i in range(len(conn_dict['vertex_start'])):
+            for j in range(i+1, len(conn_dict['vertex_start'])):
+                if conn_dict['vertex_start'][i] == conn_dict['vertex_start'][j]:
+                    if conn_dict['vertex_end'][i] == conn_dict['vertex_end'][j]:
+                        print(i, j)
+                if conn_dict['vertex_start'][i] == conn_dict['vertex_end'][j]:
+                    if conn_dict['vertex_end'][i] == conn_dict['vertex_start'][j]:
+                        print(i, j)
+
         return
 
 
