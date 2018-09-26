@@ -9,6 +9,7 @@ import angles
 import names
 import pdb
 import time
+import running_heaven
 
 
 class DataBuilder():
@@ -31,12 +32,17 @@ class DataBuilder():
         self.borough_code = self.boroughs[borough]
         self.borough = borough
         # missing boroughs are: {'B', 'Q', 'R', 'X'}
+
+        # data structure
+        self.running_heaven_path = running_heaven.__path__[0]
+        if 'data' not in os.listdir(self.running_heaven_path):
+            os.mkdir(os.path.join(self.running_heaven_path, 'data'))
         return
 
     def load_raw_data(self):
         """
         """
-        path = '../raw_data/'
+        path = os.path.join(self.running_heaven_path, 'raw_data/')
         data_file_names = {'park': 'Parks Zones.geojson',
                            'sidewalk': 'Sidewalk Centerline.geojson',
                            'street': 'NYC Street Centerline (CSCL).geojson',
@@ -339,22 +345,26 @@ class DataBuilder():
                    'min_dist_to_park']
         df = pd.DataFrame(data_dict, columns=columns)
         df = gpd.GeoDataFrame(df)
-        df.to_file("processed/route_connections.geojson")
+        df.to_file(os.path.join(self.running_heaven_path, 'data', 'processed',
+                                'route_connections.geojson'))
         return
 
     def write_processed_data_to_file(self, dfs):
         """
         write data to file for plotting when optimizing routes
         """
-        if not 'processed' in os.listdir('.'):
-            os.mkdir('processed')
+        if not 'processed' in os.listdir(os.path.join(self.running_heaven_path,
+                                                      'data')):
+            os.mkdir(os.path.join(self.running_heaven_path, 'data',
+                                  'processed'))
         for key_ in dfs.keys():
             if key_ == 'tree':
-                file_name = os.path.join('processed',
-                                         '{0:s}.csv'.format(key_))
+                file_name = os.path.join(self.running_heaven_path, 'data',
+                                         'processed', '{0:s}.csv'.format(key_))
                 dfs[key_].to_csv(file_name)
             else:
-                file_name = os.path.join('processed',
+                file_name = os.path.join(self.running_heaven_path, 'data',
+                                         'processed',
                                          '{0:s}.geojson'.format(key_))
                 dfs[key_].to_file(file_name)
         return
@@ -373,18 +383,9 @@ class DataBuilder():
         max_density = max(dict_['tree_density'])
         #dict_['tree_density'][is_sidewalk] = max_density
 
-        pl.subplot(211)
-        pl.hist(dict_['tree_density'])
-        pl.subplot(212)
-        pl.hist(dict_['tree_density'][is_street])
-        pl.show()
-        pdb.set_trace()
-
         # dict_['tree_density'] /= max(dict_['tree_density'])
         dict_['tree_density'] /= pl.percentile(dict_['tree_density'][is_street], 85.)
         pl.hist(dict_['tree_density'], bins=pl.arange(0., 1.5, 0.05))
-        pl.show()
-        pdb.set_trace()
 
         # randomize weight of sidewalks
         dict_['tree_density'][is_sidewalk] = 0.75+0.15*pl.randn(len(dict_['tree_density'][is_sidewalk]))
@@ -398,11 +399,6 @@ class DataBuilder():
         dict_['tree_density'][dict_['tree_density'] > 0.999] = 0.999
         dict_['tree_density'][dict_['tree_density'] < 0.] = 0.
         pl.hist(dict_['tree_density'], bins=pl.arange(0., 1.5, 0.05))
-        pl.show()
-        pdb.set_trace()
-        #dict_['tree_density'] *= 2.
-        #dict_['tree_density'][is_sidewalk] = -1.
-        #pdb.set_trace()
 
         dict_['min_dist_to_park'] = []
         for i in range(len(dict_['vertex_start'])):
@@ -432,14 +428,14 @@ class DataBuilder():
         # central park, small
         # data_dfs = self.zoom_on_data(data_dfs, -73.97, 40.77, 0.01, True)
         # central park, big
-        # data_dfs = self.zoom_on_data(data_dfs, -73.97, 40.77, 0.02, True)
+        data_dfs = self.zoom_on_data(data_dfs, -73.97, 40.77, 0.02, True)
 
         # data_dfs = self.zoom_on_data(data_dfs, -73.994, 40.740, 0.01, False)
         # data_dfs = self.zoom_on_data(data_dfs, -73.994, 40.740, 0.01, True)
         # self.plot_data(data_dfs)
 
-        # south manhattan
-        data_dfs = self.zoom_on_data(data_dfs, -73.99, 40.73, 0.02, True)
+        # south manhattan???
+        # data_dfs = self.zoom_on_data(data_dfs, -73.99, 40.73, 0.02, True)
 
 
         self.write_processed_data_to_file(data_dfs)

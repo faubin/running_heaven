@@ -105,8 +105,7 @@ venv.bak/
 
 
 # custome files
-selected_data_segments.csv
-selected_data_vertices.csv
 raw_data/
 code/*png
-code/processed*
+*__init__.py
+data/

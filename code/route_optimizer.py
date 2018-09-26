@@ -422,7 +422,7 @@ class RunRouteOptimizer():
     def run(self, pt1, pt2, target_dist, units='km', type_=1):
         """
         """
-        full_file_path = os.path.join(self.running_heaven_path, 'code',
+        full_file_path = os.path.join(self.running_heaven_path, 'data',
                                       'processed', 'route_connections.geojson')
         new_df2 = gpd.read_file(full_file_path)
         new_df2.rename(index=str, columns={'vertex_sta': 'vertex_start',
@@ -447,7 +447,7 @@ class RunRouteOptimizer():
 
         # load data for plotting
         dfs = {}
-        processed_path = os.path.join(self.running_heaven_path, 'code',
+        processed_path = os.path.join(self.running_heaven_path, 'data',
                                       'processed')
         for key_ in ['park', 'street', 'sidewalk']:
             print(key_)
