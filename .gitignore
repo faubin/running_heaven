@@ -108,3 +108,5 @@ venv.bak/
 selected_data_segments.csv
 selected_data_vertices.csv
 raw_data/
+code/*png
+code/processed*
