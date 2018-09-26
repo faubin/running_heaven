@@ -3,7 +3,9 @@ import heapq
 import copy
 import pandas as pd
 import geopandas as gpd
-import pylab as pl
+#import pylab as pl
+import matplotlib.pyplot as pl
+import numpy as np
 import running_heaven.code.names as names
 import running_heaven.code.angles as angles
 import running_heaven.code.locations as locations
@@ -29,13 +31,13 @@ class RunRouteOptimizer():
         """
         """
         costs = df['tree_density_weight'].values
-        cost_intersections = pl.zeros(len(costs))
+        cost_intersections = np.zeros(len(costs))
         cost_intersections[df['type'].values == 'street'] = 1.
         costs += cost_intersections
-        costs = pl.append(costs, costs)
+        costs = np.append(costs, costs)
         distances = self.convert_distance_to_physical(df['distance'].values,
                                                       units)
-        distances = pl.append(distances, distances)
+        distances = np.append(distances, distances)
 
         # x is 1 for a selected path, 0 otherwise, need to define both ways
         names = []
@@ -111,10 +113,10 @@ class RunRouteOptimizer():
                 for i in range(len(vert_names)):
                     vert_names[i] = vert_names[i].replace('m', '-')
 
-                xxx = pl.where(pl.logical_and(df['vertex_start'].values == vert_names[0], df['vertex_end'].values == vert_names[1]))[0]
+                xxx = np.where(np.logical_and(df['vertex_start'].values == vert_names[0], df['vertex_end'].values == vert_names[1]))[0]
                 if len(xxx) == 1:
                     inde.append(xxx[0])
-                xxx = pl.where(pl.logical_and(df['vertex_end'].values == vert_names[0], df['vertex_start'].values == vert_names[1]))[0]
+                xxx = np.where(np.logical_and(df['vertex_end'].values == vert_names[0], df['vertex_start'].values == vert_names[1]))[0]
                 if len(xxx) == 1:
                     inde.append(xxx[0])
 
@@ -174,12 +176,12 @@ class RunRouteOptimizer():
                     cost_dist = 0.
                 else:
                     cost_dist = r_factor**2
-                    cost_dist *= ((1. + pl.cos(pl.pi+theta_diff))/2.)**2
+                    cost_dist *= ((1. + np.cos(np.pi+theta_diff))/2.)**2
 
                 # spiral term when far
                 cost_dist2 = (1. - r_factor)**2
-                # cost_dist2 *= ((1. + pl.cos(2.*theta_diff))/2.)**2
-                cost_dist2 *= ((1. + pl.cos(theta_diff))/2.)**2
+                # cost_dist2 *= ((1. + np.cos(2.*theta_diff))/2.)**2
+                cost_dist2 *= ((1. + np.cos(theta_diff))/2.)**2
 
                 # tree weight
                 cost_tree = (1. - r_factor)**2
@@ -196,7 +198,7 @@ class RunRouteOptimizer():
                               weight[3]*cost_park,
                               weight[4]*cost_intersection]
 
-                temp[0] = copy.deepcopy(pl.sum(cost_terms))
+                temp[0] = copy.deepcopy(np.sum(cost_terms))
                 object_[key_][i] = temp
         return object_
 
@@ -312,7 +314,7 @@ class RunRouteOptimizer():
 
         # plotting the route
         new_gdf2 = gpd.GeoDataFrame(new_df2)
-        new_gdf2_path = new_gdf2.iloc[pl.array(path_indices)]
+        new_gdf2_path = new_gdf2.iloc[np.array(path_indices)]
         new_gdf2_path.plot(ax=ax2, color='k', linewidth=4)
         pl.savefig('path_run.png')
         pl.savefig('../app/flaskexample/static/path_run.png')
@@ -323,7 +325,7 @@ class RunRouteOptimizer():
         """
         ind = df["vertex_start"] == pt1
         ind &= df['vertex_end'] == pt2
-        ind = pl.where(ind)[0]
+        ind = np.where(ind)[0]
         return ind
 
     def get_indices_from_path(self, path, start_pt, df):
@@ -514,8 +516,8 @@ class RunRouteOptimizer():
                 cost_list.append(opt_path[0])
                 print(weight, d_path, opt_path[0])
 
-            n = pl.argmin(abs(pl.array(d_path_list) - target_dist))
-            #n = pl.argmin(cost_list)
+            n = np.argmin(abs(np.array(d_path_list) - target_dist))
+            #n = np.argmin(cost_list)
             print(n, weights[n])
             d_path = d_path_list[n]
             path_indices = path_indices_list[n]
