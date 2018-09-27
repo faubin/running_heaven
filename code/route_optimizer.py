@@ -10,7 +10,10 @@ import running_heaven.code.names as names
 import running_heaven.code.angles as angles
 import running_heaven.code.locations as locations
 import pdb
-import pulp
+try:
+    import pulp
+except ImportError:
+    print('Warning: pulp was not imported, but it is not needed by default')
 import os
 import running_heaven
 import itertools
@@ -22,7 +25,10 @@ class RunRouteOptimizer():
     def __init__(self, show=True, borough='M'):
         """
         """
-        self.running_heaven_path = running_heaven.__path__[0]
+        if '_path' in dir(running_heaven.__path__):
+            self.running_heaven_path = running_heaven.__path__._path[0]
+        else:
+            self.running_heaven_path = running_heaven.__path__[0]
         self.show = show
         return
 
