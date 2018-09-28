@@ -428,7 +428,7 @@ class DataBuilder():
         # central park, small
         # data_dfs = self.zoom_on_data(data_dfs, -73.97, 40.77, 0.01, True)
         # central park, big
-        data_dfs = self.zoom_on_data(data_dfs, -73.97, 40.77, 0.02, True)
+        #data_dfs = self.zoom_on_data(data_dfs, -73.97, 40.77, 0.02, True)
 
         # data_dfs = self.zoom_on_data(data_dfs, -73.994, 40.740, 0.01, False)
         # data_dfs = self.zoom_on_data(data_dfs, -73.994, 40.740, 0.01, True)
@@ -437,6 +437,11 @@ class DataBuilder():
         # south manhattan???
         # data_dfs = self.zoom_on_data(data_dfs, -73.99, 40.73, 0.02, True)
 
+        # need this to run to add features to the dfs
+        data_dfs = self.zoom_on_data(data_dfs, -73.97, 40.77, 1., False)
+
+        if 'rep_x_rad' not in data_dfs['park'].keys():
+            print('Warning: run zoom_on_data(), otherwise, missing column.')
 
         self.write_processed_data_to_file(data_dfs)
 
