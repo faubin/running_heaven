@@ -14,13 +14,13 @@
        * element that contains the map. */
       #map {
         height: 100%;
-        width: 90%;
+        width: 100%;
       }
       /* Optional: Makes the sample page fill the window. */
       html, body {
         height: 80%;
-        margin: 20;
-        padding: 99;
+        margin: 10%;
+        padding: 0;
       }
     </style>
     <link rel="icon" href="../../favicon.ico">
@@ -61,8 +61,10 @@
     </nav>
 <br><br>
 
+<div class="container">
    <div class="starter-template">
        <font size="7">Running Heaven</font>
+   </div>
    </div>
 
      <form action="/output" method="GET">
@@ -74,14 +76,6 @@
 
     <div id="map"></div>
     <script>
-      var map;
-      function initMap() {
-        map = new google.maps.Map(document.getElementById('map'), {
-          center: {lat: 40.763480, lng: -73.967271},
-          zoom: 12
-        });
-      }
-
 
       function initMap() {
         var map = new google.maps.Map(document.getElementById('map'), {
@@ -106,12 +100,24 @@
         });
 
         flightPath.setMap(map);
+
+
+            google.maps.event.addDomListener(document.getElementById('dispmap'), 'click', function() {
+    var elem = document.getElementById("map");
+    console.log("before:" + elem.style.display);
+    elem.style.display = (elem.style.display === 'none' ||
+      elem.style.display === '') ? 'block' : 'none';
+    console.log("after:" + elem.style.display);
+    google.maps.event.trigger(map, 'resize');
+    map.setCenter(mapOptions.center);
+  })
       }
 
     </script>
     <script src="https://maps.googleapis.com/maps/api/js?key={{ api_key }}&callback=initMap"
     async defer></script>
 
+<p><br /><br /></p>
 
   </body>
 </html>
