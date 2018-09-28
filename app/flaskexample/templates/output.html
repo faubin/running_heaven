@@ -14,6 +14,7 @@
        * element that contains the map. */
       #map {
         height: 100%;
+        width: 90%;
       }
       /* Optional: Makes the sample page fill the window. */
       html, body {
@@ -53,7 +54,7 @@
         <div id="navbar" class="collapse navbar-collapse">
           <ul class="nav navbar-nav">
             <li class="active"><a href="#">Home</a></li>
-            <li><a href="#about">About</a></li>
+            <li><a href="about">About</a></li>
           </ul>
         </div><!--/.nav-collapse -->
       </div>
@@ -61,16 +62,15 @@
 <br><br>
 
    <div class="starter-template">
-       <h2>Running Heaven</h2>
-       <p>Enter a starting and end point for your run</p>
+       <font size="7">Running Heaven</font>
    </div>
 
      <form action="/output" method="GET">
-         <p><strong>Starting point (-73.967271_40.763480): </strong> {{start_point}}</p>
-         <p><strong>End point (-73.963214_40.771740): </strong> {{end_point}}</p>
-         <p><strong>Length (3.0 km): </strong> {{length}}</p>
+         <font size="5"><strong>Starting point: </strong> {{start_point}}</font><p></p>
+         <font size="5"><strong>End point: </strong> {{end_point}}</font><p></p>
+         <font size="5"><strong>Target length: </strong> {{length_requested}} km</font><p></p>
+         <font size="5"><strong>Actual length: </strong> {{actual_length}} km</font><p></p>
      </form>
-
 
     <div id="map"></div>
     <script>
@@ -111,12 +111,6 @@
     </script>
     <script src="https://maps.googleapis.com/maps/api/js?key={{ api_key }}&callback=initMap"
     async defer></script>
-
-   <div class="container">
-     <div class="starter-template">
-       <h3>Your Running Route:</h3>
-       <p class="lead">You requested a run of length: {{length_requested}} km.<br>This route has a length of {{actual_length}} km.</p>
-     </div>
 
 
   </body>
