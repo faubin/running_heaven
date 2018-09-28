@@ -4,7 +4,10 @@ import copy
 import pandas as pd
 import geopandas as gpd
 #import pylab as pl
-import matplotlib.pyplot as pl
+try:
+    import matplotlib.pyplot as pl
+except ImportError:
+    print('Warning: matplolib failed to run, run the app with show=False.')
 import numpy as np
 import running_heaven.code.names as names
 import running_heaven.code.angles as angles
@@ -41,7 +44,7 @@ class RunRouteOptimizer():
         cost_intersections[df['type'].values == 'street'] = 1.
         costs += cost_intersections
         costs = np.append(costs, costs)
-        distances = self.convert_distance_to_physical(df['distance'].values,
+        distances = angles.convert_distance_to_physical(df['distance'].values,
                                                       units)
         distances = np.append(distances, distances)
 
@@ -129,7 +132,7 @@ class RunRouteOptimizer():
         # The optimised objective function value is printed to the screen
         print("Total Cost = ", pulp.value(prob.objective))
 
-        length =  self.convert_distance_to_physical(df['distance'].iloc[inde].sum(), units)
+        length =  angles.convert_distance_to_physical(df['distance'].iloc[inde].sum(), units)
         return inde, length
 
     def update_costs(self, object_, target_d, d_done, current_point,
@@ -174,7 +177,7 @@ class RunRouteOptimizer():
                 # 1 (end, dist_ran=target_d) if dist_ran < target_d:
                 dist_frac = 0.5
                 if dist_ran < dist_frac * target_d:
-                    r_factor = 0.#(dist_ran / (dist_frac * target_d/2.))
+                    r_factor = (dist_ran / (dist_frac * target_d/2.))
                 else:
                     r_factor = 1.
                 # no cost as long as we have not reached the proper length
@@ -305,7 +308,7 @@ class RunRouteOptimizer():
         pl.ylabel('Latitude ($^o$)', fontsize=20)
         pl.xticks(fontsize=16)
         pl.yticks(fontsize=16)
-        pl.title('NYC Map of Running Areas', fontsize=20)
+        # pl.title('NYC Map of Running Areas', fontsize=20)
 
         # plots starting and end point
         lon_start, lat_start = names.name_to_lon_lat(start_point)
@@ -319,11 +322,14 @@ class RunRouteOptimizer():
         #     pl.plot(lon, lat, '.k')
 
         # plotting the route
-        new_gdf2 = gpd.GeoDataFrame(new_df2)
-        new_gdf2_path = new_gdf2.iloc[np.array(path_indices)]
-        new_gdf2_path.plot(ax=ax2, color='k', linewidth=4)
+        if path_indices is not None:
+            new_gdf2 = gpd.GeoDataFrame(new_df2)
+            new_gdf2_path = new_gdf2.iloc[np.array(path_indices)]
+            new_gdf2_path.plot(ax=ax2, color='k', linewidth=4)
+        #pl.xlim([-73.985, -73.955])
+        #pl.ylim([40.760, 40.785])
         pl.savefig('path_run.png')
-        pl.savefig('../app/flaskexample/static/path_run.png')
+        # pl.savefig('../app/flaskexample/static/path_run.png')
         return
 
     def find_vertex_index(self, df, pt1, pt2):
@@ -358,42 +364,6 @@ class RunRouteOptimizer():
         path_indices.append(ind[0])
         return path_indices, dist
 
-    def convert_distance_to_physical(self, d, units):
-        """
-        Radius of the Earth is 6371 km
-        Adding a calibration factor from google map
-        (https://www.google.com/maps/dir/Lexington+Ave+%26+E+61st+St,+New+York,+NY+10065/Park+Ave+%26+E+73rd+St,+New+York,+NY+10021/@40.7676217,-73.9701548,16z/data=!3m1!4b1!4m29!4m28!1m20!1m1!1s0x89c258ef6f253e81:0xc63aaaefe619a028!2m2!1d-73.9672732!2d40.763483!3m4!1m2!1d-73.9670875!2d40.7641824!3s0x89c258ef0e376ec5:0x684920ca0dae693c!3m4!1m2!1d-73.9670561!2d40.7658053!3s0x89c258eedd47f62f:0xbc3a1f4edbac2d31!3m4!1m2!1d-73.9648687!2d40.7674145!3s0x89c258ec0082592f:0x2c3535f29e0f6140!1m5!1m1!1s0x89c258eb33cd4015:0x777eea69b117a3c3!2m2!1d-73.9632455!2d40.7717443!3e2)
-        This factor is 1.5567 km / 1.4000 km = 1.1119
-        There is 0.621371 mile in a km
-        """
-        if units not in ['km', 'miles']:
-            raise ValueError('Units must me "km" or "miles"')
-
-        d = angles.deg_to_rad(d)
-        if units == 'km':
-            d *= (6371. / 1.1119)
-        else:
-            d *= (6371. / 1.1119) * 0.621371
-        return d
-
-    def convert_distance_to_degree(self, d, units):
-        """
-        Radius of the Earth is 6371 km
-        Adding a calibration factor from google map (see
-        convert_distance_to_physical)
-        This factor is 1.5567 km / 1.4000 km = 1.1119
-        There is 0.621371 mile in a km
-        """
-        if units not in ['km', 'miles']:
-            raise ValueError('Units must me "km" or "miles"')
-
-        if units == 'km':
-            d /= (6371. / 1.1119)
-        else:
-            d /= (6371. / 1.1119) * 0.621371
-        d = angles.rad_to_deg(d)
-        return d
-
     def get_route(self, df, path_indices, start_point, end_point):
         """
         """
@@ -410,6 +380,7 @@ class RunRouteOptimizer():
         path = []
         done = False
         while not done:
+            prev_path_length = len(path)
             for i in range(len(vertexes)):
                 if vertexes[i].split('_to_')[0] == node:
                     path.append(vertexes[i].split('_to_')[0].split('_')[::-1])
@@ -424,10 +395,12 @@ class RunRouteOptimizer():
                     break
             if node == end_point:
                 done = True
+            if len(path) == prev_path_length:
+                return None
         path.append(end_point.split('_')[::-1])
         return path
 
-    def run(self, pt1, pt2, target_dist, units='km', type_=1):
+    def run(self, pts, target_dist, units='km', type_=1, cost_weights=None):
         """
         """
         full_file_path = os.path.join(self.running_heaven_path, 'data',
@@ -445,29 +418,26 @@ class RunRouteOptimizer():
         intersection_names = list(set(intersection_names))
 
         # get closest intersection to provided points
-        pt1_lon, pt1_lat = names.name_to_lon_lat(pt1)
-        pt2_lon, pt2_lat = names.name_to_lon_lat(pt2)
+        pt1_lon, pt1_lat = names.name_to_lon_lat(pts[0])
+        pt2_lon, pt2_lat = names.name_to_lon_lat(pts[1])
         start_point = locations.get_closest_point_to(pt1_lon, pt1_lat,
                                                      intersection_names)
         end_point = locations.get_closest_point_to(pt2_lon, pt2_lat,
                                                    intersection_names)
-        print("Optimizing route from {0:s} to {1:s}".format(pt1, pt2))
+        print("Optimizing route from {0:s} to {1:s}".format(pts[0], pts[1]))
 
         # load data for plotting
         dfs = {}
         processed_path = os.path.join(self.running_heaven_path, 'data',
                                       'processed')
         for key_ in ['park', 'street', 'sidewalk']:
-            print(key_)
             dfs[key_] = gpd.read_file(os.path.join(processed_path,
                                                    '{0:s}.geojson'.format(key_)))
-        print('tree')
         dfs['tree'] = pd.read_csv(os.path.join(processed_path, 'tree.csv'))
-        print('tree_weights')
 
         # updating dataframe
         new_df2['tree_density_weight'] = 1. - new_df2['tree_density']
-        target_dist_deg = self.convert_distance_to_degree(target_dist, units)
+        target_dist_deg = angles.convert_distance_to_degree(target_dist, units)
         park_weight = self.define_park_weight(new_df2,# dfs['park'],
                                               target_dist_deg)
         new_df2['park_weight'] = park_weight
@@ -480,7 +450,7 @@ class RunRouteOptimizer():
             path_indices, d_path = self.int_prog(new_df2, units, start_point,
                                                  end_point, target_dist,
                                                  dfs['park'])
-                          #self.convert_distance_to_physical(target_dist_deg,
+                          #angles.convert_distance_to_physical(target_dist_deg,
                           #                                  units))
         elif type_ == 1:
             # problem information for Dijkstra's algorithm
@@ -498,13 +468,27 @@ class RunRouteOptimizer():
                               {'distance': new_df2['distance'].iloc[i],
                                'tree_density_weight': new_df2['tree_density_weight'].iloc[i],
                                'park_weight': new_df2['park_weight'].iloc[i],
-                               'intersection': int(new_df2['type'].iloc[1260] == 'street'),
+                               'intersection': int(new_df2['type'].iloc[i] == 'street'),
                                }
                               ))
 
             # try different cost term weights
             choices = [0.1, 10.]
-            weights = [p for p in itertools.product(choices, repeat=5)]
+            weights = [np.array(p) for p in itertools.product(choices,
+                                                              repeat=5)]
+            # set fixed values if provides
+            if cost_weights is not None:
+                fixed = ~np.isnan(cost_weights)
+                for i in range(len(weights)):
+                    weights[i][fixed] = np.array(cost_weights)[fixed]
+                weights = [list(i) for i in weights]
+
+                # remove duplicates
+                for i in range(len(weights)-1, -1, -1):
+                    if weights.count(weights[i]) > 1:
+                        weights.pop(i)
+
+            # iterate on the different weights
             path_indices_list = []
             d_path_list = []
             cost_list = []
@@ -512,15 +496,19 @@ class RunRouteOptimizer():
                 opt_path = self.dijkstra(edges, start_point, end_point,
                                          target_dist_deg, weight)
 
+                if opt_path[0] == 0.:
+                    print('Warning: impossible route')
+                    self.plot_route(dfs, intersection_names, start_point,
+                                    end_point, new_df2, None)
+                    return None, None
                 # get indices from path
                 path_indices, d_path = self.get_indices_from_path(opt_path,
                                                                   start_point,
                                                                   new_df2)
-                d_path = self.convert_distance_to_physical(d_path, units)
+                d_path = angles.convert_distance_to_physical(d_path, units)
                 path_indices_list.append(path_indices)
                 d_path_list.append(d_path)
                 cost_list.append(opt_path[0])
-                print(weight, d_path, opt_path[0])
 
             n = np.argmin(abs(np.array(d_path_list) - target_dist))
             #n = np.argmin(cost_list)
@@ -530,10 +518,10 @@ class RunRouteOptimizer():
         else:
             exit('Analysis types 1 and 2 defined so far.')
 
-        print('plotting')
         # plotting the data and route
-        self.plot_route(dfs, intersection_names, start_point, end_point,
-                        new_df2, path_indices)
+        if self.show():
+            self.plot_route(dfs, intersection_names, start_point, end_point,
+                            new_df2, path_indices)
 
         # resulting distance
         print('Total distance is : {0:f} {1:s}'.format(d_path, units))
@@ -550,18 +538,21 @@ class RunRouteOptimizer():
 if __name__ == "__main__":
     # pt1 = Lexington Ave & E 61st St, New York, NY 10065
     # pt2 = Park Ave & E 79th St, New York, NY 10075
-    # pt1, pt2 = ('-73.967_40.763', '-73.963_40.772')  # SE NE of CP
-    # pt2, pt1 = ('-73.967_40.763', '-73.963_40.772')
-    # pt1, pt2 = ('-73.994_40.740', '-73.995_40.749')
+    # pts = ('-73.967_40.763', '-73.963_40.772')  # SE NE of CP
+    # pts = ('-73.963_40.772', '-73.967_40.763')
+    # pts = ('-73.994_40.740', '-73.995_40.749')
 
     # central park
-    pt1, pt2 = ('-73.967_40.763', '-73.979_40.777')  # SE to NW of CP
-    pt1, pt2 = ('-73.967_40.763', '-73.967_40.764')  # SE to SE of CP
-    pt1, pt2 = ('-73.976_40.766', '-73.980_40.769')  # loop in CP
+    pts = ('-73.967_40.763', '-73.979_40.777')  # SE to NW of CP
+    # pts = ('-73.967_40.763', '-73.967_40.764')  # SE to SE of CP
+    # pts = ('-73.976_40.766', '-73.980_40.769')  # loop in CP
 
     # south Mahattan
-    # pt1, pt2 = ('-73.988_40.729', '-73.996_40.722')  #
-    # pt1, pt2 = ('-73.974_40.726', '-73.985_40.7112')  #
+    # pts = ('-73.988_40.729', '-73.996_40.722')  #
+    # pts = ('-73.974_40.726', '-73.985_40.7112')  #
+
+    # one point is sidewalk in Brooklyn
+    #pts=('40.776112_-73.979746', '40.778238_-73.971427')
 
     # target_dist = 3.
     target_dist = 5.
@@ -573,4 +564,4 @@ if __name__ == "__main__":
     # type_ = 2  # intger programming, slow and has problems
 
     app = RunRouteOptimizer()
-    d = app.run(pt1, pt2, target_dist, units, type_)
+    d = app.run(pts, target_dist, units, type_)
