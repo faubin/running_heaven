@@ -519,7 +519,7 @@ class RunRouteOptimizer():
             exit('Analysis types 1 and 2 defined so far.')
 
         # plotting the data and route
-        if self.show():
+        if self.show:
             self.plot_route(dfs, intersection_names, start_point, end_point,
                             new_df2, path_indices)
 
