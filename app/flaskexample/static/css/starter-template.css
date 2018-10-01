@@ -6,6 +6,7 @@
 
 .navbar {
     background-color: #FFFFFF !important;
+    border: 0;
 }
 .navbar .navbar-brand{
     color: #000000 !important;
