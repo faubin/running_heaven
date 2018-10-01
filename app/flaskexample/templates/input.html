@@ -1,15 +1,14 @@
 <!DOCTYPE html>
 <html lang="en">
   <head>
+    <title>Running Heaven</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta charset="utf-8">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
     <!-- The above 3 meta tags *must* come first in the head; any other head content must come *after* these tags -->
     <meta name="description" content="">
     <meta name="author" content="">
     <link rel="icon" href="../../favicon.ico">
-
-    <title>Starter Template for Bootstrap</title>
 
     <!-- Bootstrap core CSS -->
     <link href="../static/css/bootstrap.min.css" rel="stylesheet">
@@ -42,7 +41,7 @@
             <span class="icon-bar"></span>
             <span class="icon-bar"></span>
           </button>
-          <a class="navbar-brand" href="#">Running Heaven</a>
+          <a class="navbar-brand" href="input">Running Heaven</a>
         </div>
         <div id="navbar" class="collapse navbar-collapse">
           <ul class="nav navbar-nav">
@@ -54,27 +53,31 @@
     </nav>
 <br><br>
 
+<img src="../static/css/running_cropped.jpg" width=100% height=10%>
+
 <div class="container">
 
    <div class="starter-template">
+       <p></p>
        <font size="7">Running Heaven</font><p></p>
-       <font size="5"> Enter a starting point, an end point, and an interend run length for your run in Mahattan</font><p></p>
+       <font size="5"> A route optimizer based on pleasantness for Manhattan.</font><p></p>
+       <font size="5"> Enter a starting point, an end point, and an intended run length for your run.</font><p></p>
    </div>
 
    <div class = "container">
 
      <form action="/output" method="GET">
        <div class="form-group">
-         <label for="pt1"><font size="5"><strong>Starting point (-73.967271_40.763480):</strong> </font></label>
-         <input type="text" id="pt1" name='pt1' placeholder="longitude_latitude ">
+         <label for="pt1"><font size="5"><strong>Starting point:</strong> </font></label>
+         <input type="text" id="pt1" name='pt1' placeholder="Lexington Ave. and 62nd St. ">
        </div>
        <div class="form-group">
-         <label for="pt2"><font size="5"><strong>End point (-73.963214_40.771740):</strong> </font></label>
-         <input type="text" id="pt2" name='pt2' placeholder="longitude_latitude">
+         <label for="pt2"><font size="5"><strong>End point:</strong> </font></label>
+         <input type="text" id="pt2" name='pt2' placeholder="Park Ave. and 73rd St.">
        </div>
        <div class="form-group">
-         <label for="length"><font size="5"><strong>Target length (3.0 km):</strong> </font></label>
-         <input type="text" id="length" name='length' placeholder="X.Y">
+         <label for="length"><font size="5"><strong>Target length (km):</strong> </font></label>
+         <input type="text" id="length" name='length' placeholder="3.0">
        </div>
        <div>
          <button type="submit" class="btn btn-default btn-lg">Find Optimal Running Route</button>

@@ -1,7 +1,20 @@
-body {
-  padding-top: 50px;
-}
 .starter-template {
   padding: 40px 15px;
   text-align: center;
 }
+
+
+.navbar {
+    background-color: #FFFFFF !important;
+}
+.navbar .navbar-brand{
+    color: #000000 !important;
+}
+.navbar .navbar-nav li a{
+    color: #000000 !important;
+    background-color: #FFFFFF !important;
+}
+.navbar .navbar-nav li a:hover{
+    color: #888888 !important;
+}
+
