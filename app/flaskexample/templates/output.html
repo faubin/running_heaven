@@ -83,13 +83,13 @@
 
       function initMap() {
         var map = new google.maps.Map(document.getElementById('map'), {
-          zoom: 12,
-          center: {lat: 40.763480, lng: -73.967271},
+          zoom: 14,
+            center: {lat: {{ center_lat }}, lng: {{ center_lon }}},
           mapTypeId: 'terrain'
         });
 
         var flightPlanCoordinates = [
-            {% for k in x %}
+            {% for k in route %}
             {lat: {{ k[0] }}, lng: {{ k[1]}} },
             {% endfor %}
 
@@ -120,6 +120,30 @@
     </script>
     <script src="https://maps.googleapis.com/maps/api/js?key={{ api_key }}&callback=initMap"
     async defer></script>
+
+<p><br /><br /></p>
+
+   <div class = "container">
+
+     <form action="/output" method="GET">
+       <div class="form-group">
+         <label for="pt1"><font size="5"><strong>Starting point:</strong> </font></label>
+         <input type="text" id="pt1" name='pt1' size="48" placeholder="Lexington Ave. and 62nd St. ">
+       </div>
+       <div class="form-group">
+         <label for="pt2"><font size="5"><strong>End point:</strong> </font></label>
+         <input type="text" id="pt2" name='pt2'  size="48" placeholder="Park Ave. and 73rd St.">
+       </div>
+       <div class="form-group">
+         <label for="length"><font size="5"><strong>Target length (km):</strong> </font></label>
+         <input type="text" id="length" name='length'  size="48" placeholder="3.0">
+       </div>
+       <div>
+         <button type="submit" class="btn btn-default btn-lg">Find Optimal Running Route</button>
+       </div>
+     </form>
+
+   </div>
 
 <p><br /><br /></p>
 

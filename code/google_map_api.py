@@ -24,4 +24,5 @@ class GoogleMapApi(api_keys.ApiKeys):
         geocode_result = self.gmaps.geocode(address)
         lon_lat = (geocode_result[0]['geometry']['location']['lng'],
                    geocode_result[0]['geometry']['location']['lat'])
-        return lon_lat
+        lon_lat_str = '{0:f}_{1:f}'.format(*lon_lat)
+        return lon_lat_str
