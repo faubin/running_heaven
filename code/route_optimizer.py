@@ -3,7 +3,6 @@ import heapq
 import copy
 import pandas as pd
 import geopandas as gpd
-#import pylab as pl
 try:
     import matplotlib.pyplot as pl
 except ImportError:
@@ -12,26 +11,23 @@ import numpy as np
 import running_heaven.code.names as names
 import running_heaven.code.angles as angles
 import running_heaven.code.locations as locations
+from running_heaven.code import core
 import pdb
 try:
     import pulp
 except ImportError:
     print('Warning: pulp was not imported, but it is not needed by default')
 import os
-import running_heaven
 import itertools
 
 
-class RunRouteOptimizer():
+class RunRouteOptimizer(core.HeavenCore):
     """
     """
     def __init__(self, show=True, borough='M'):
         """
         """
-        if '_path' in dir(running_heaven.__path__):
-            self.running_heaven_path = running_heaven.__path__._path[0]
-        else:
-            self.running_heaven_path = running_heaven.__path__[0]
+        core.HeavenCore.__init__(self)
         self.show = show
         return
 
@@ -45,7 +41,7 @@ class RunRouteOptimizer():
         costs += cost_intersections
         costs = np.append(costs, costs)
         distances = angles.convert_distance_to_physical(df['distance'].values,
-                                                      units)
+                                                        units)
         distances = np.append(distances, distances)
 
         # x is 1 for a selected path, 0 otherwise, need to define both ways
@@ -98,8 +94,8 @@ class RunRouteOptimizer():
             prob += x[i] + x[i+len_] <= 1, "one_way" + str(i)
 
         # constraint on distance
-        #prob += (x * distances).sum() >= 0.9 * target_distance, 'distance1'
-        #prob += (x * distances).sum() <= 1.1 * target_distance, 'distance2'
+        # prob += (x * distances).sum() >= 0.9 * target_distance, 'distance1'
+        # prob += (x * distances).sum() <= 1.1 * target_distance, 'distance2'
         prob += (x * distances).sum() >= target_distance-0.2, 'distance1'
         prob += (x * distances).sum() <= target_distance+0.2, 'distance2'
 
@@ -132,7 +128,7 @@ class RunRouteOptimizer():
         # The optimised objective function value is printed to the screen
         print("Total Cost = ", pulp.value(prob.objective))
 
-        length =  angles.convert_distance_to_physical(df['distance'].iloc[inde].sum(), units)
+        length = angles.convert_distance_to_physical(df['distance'].iloc[inde].sum(), units)
         return inde, length
 
     def update_costs(self, object_, target_d, d_done, current_point,
@@ -270,8 +266,8 @@ class RunRouteOptimizer():
         """
         ret = []
         weight = (df['min_dist_to_park'] / target_d)**0.5  # **2
-        #weight = (df['min_dist_to_park'] / target_d)**1.0  # **2
-        #weight = (df['min_dist_to_park'] / target_d)**2.0  # **2
+        # weight = (df['min_dist_to_park'] / target_d)**1.0  # **2
+        # weight = (df['min_dist_to_park'] / target_d)**2.0  # **2
         weight.loc[weight > 1.] = 1.
         return weight
 
@@ -326,8 +322,8 @@ class RunRouteOptimizer():
             new_gdf2 = gpd.GeoDataFrame(new_df2)
             new_gdf2_path = new_gdf2.iloc[np.array(path_indices)]
             new_gdf2_path.plot(ax=ax2, color='k', linewidth=4)
-        #pl.xlim([-73.985, -73.955])
-        #pl.ylim([40.760, 40.785])
+        pl.xlim([-73.985, -73.955])
+        pl.ylim([40.760, 40.785])
         pl.savefig('path_run.png')
         # pl.savefig('../app/flaskexample/static/path_run.png')
         return
@@ -370,10 +366,10 @@ class RunRouteOptimizer():
         vertexes = []
         for i in range(len(path_indices)):
             name = '{0:s}_to_{1:s}'.format(df['vertex_start'].iloc[path_indices[i]],
-                                        df['vertex_end'].iloc[path_indices[i]])
+                                           df['vertex_end'].iloc[path_indices[i]])
             vertexes.append(name)
             name = '{1:s}_to_{0:s}'.format(df['vertex_start'].iloc[path_indices[i]],
-                                        df['vertex_end'].iloc[path_indices[i]])
+                                           df['vertex_end'].iloc[path_indices[i]])
             vertexes.append(name)
 
         node = start_point
@@ -438,7 +434,7 @@ class RunRouteOptimizer():
         # updating dataframe
         new_df2['tree_density_weight'] = 1. - new_df2['tree_density']
         target_dist_deg = angles.convert_distance_to_degree(target_dist, units)
-        park_weight = self.define_park_weight(new_df2,# dfs['park'],
+        park_weight = self.define_park_weight(new_df2,  # dfs['park'],
                                               target_dist_deg)
         new_df2['park_weight'] = park_weight
 
@@ -450,8 +446,6 @@ class RunRouteOptimizer():
             path_indices, d_path = self.int_prog(new_df2, units, start_point,
                                                  end_point, target_dist,
                                                  dfs['park'])
-                          #angles.convert_distance_to_physical(target_dist_deg,
-                          #                                  units))
         elif type_ == 1:
             # problem information for Dijkstra's algorithm
             edges = []
@@ -511,7 +505,7 @@ class RunRouteOptimizer():
                 cost_list.append(opt_path[0])
 
             n = np.argmin(abs(np.array(d_path_list) - target_dist))
-            #n = np.argmin(cost_list)
+            # n = np.argmin(cost_list)
             print(n, weights[n])
             d_path = d_path_list[n]
             path_indices = path_indices_list[n]
@@ -543,16 +537,16 @@ if __name__ == "__main__":
     # pts = ('-73.994_40.740', '-73.995_40.749')
 
     # central park
-    pts = ('-73.967_40.763', '-73.979_40.777')  # SE to NW of CP
+    # pts = ('-73.967_40.763', '-73.979_40.777')  # SE to NW of CP
     # pts = ('-73.967_40.763', '-73.967_40.764')  # SE to SE of CP
-    # pts = ('-73.976_40.766', '-73.980_40.769')  # loop in CP
+    pts = ('-73.976_40.766', '-73.980_40.769')  # loop in CP
 
     # south Mahattan
     # pts = ('-73.988_40.729', '-73.996_40.722')  #
     # pts = ('-73.974_40.726', '-73.985_40.7112')  #
 
     # one point is sidewalk in Brooklyn
-    #pts=('40.776112_-73.979746', '40.778238_-73.971427')
+    # pts=('40.776112_-73.979746', '40.778238_-73.971427')
 
     # target_dist = 3.
     target_dist = 5.

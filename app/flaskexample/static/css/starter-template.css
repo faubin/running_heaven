@@ -19,3 +19,7 @@
     color: #888888 !important;
 }
 
+label{
+    display:inline-block;
+    width:225px;
+}

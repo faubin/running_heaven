@@ -61,7 +61,7 @@
        <p></p>
        <font size="7">Running Heaven</font><p></p>
        <font size="5"> A route optimizer based on pleasantness for Manhattan.</font><p></p>
-       <font size="5"> Enter a starting point, an end point, and an intended run length for your run.</font><p></p>
+       <font size="5"> Enter a starting intersection (name Ave. and name St.), an end intersection, and an intended run length for your run in km.</font><p></p>
    </div>
 
    <div class = "container">
@@ -69,15 +69,15 @@
      <form action="/output" method="GET">
        <div class="form-group">
          <label for="pt1"><font size="5"><strong>Starting point:</strong> </font></label>
-         <input type="text" id="pt1" name='pt1' placeholder="Lexington Ave. and 62nd St. ">
+         <input type="text" id="pt1" name='pt1' size="48" placeholder="Lexington Ave. and 62nd St. ">
        </div>
        <div class="form-group">
          <label for="pt2"><font size="5"><strong>End point:</strong> </font></label>
-         <input type="text" id="pt2" name='pt2' placeholder="Park Ave. and 73rd St.">
+         <input type="text" id="pt2" name='pt2'  size="48" placeholder="Park Ave. and 73rd St.">
        </div>
        <div class="form-group">
          <label for="length"><font size="5"><strong>Target length (km):</strong> </font></label>
-         <input type="text" id="length" name='length' placeholder="3.0">
+         <input type="text" id="length" name='length'  size="48" placeholder="3.0">
        </div>
        <div>
          <button type="submit" class="btn btn-default btn-lg">Find Optimal Running Route</button>

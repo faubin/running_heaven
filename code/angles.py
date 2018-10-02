@@ -24,6 +24,7 @@ def deg_to_rad(x):
     """
     return x*np.pi/180.
 
+
 def convert_distance_to_physical(d, units):
     """
     Radius of the Earth is 6371 km
@@ -42,6 +43,7 @@ def convert_distance_to_physical(d, units):
         d *= (6371. / 1.1119) * 0.621371
     return d
 
+
 def convert_distance_to_degree(d, units):
     """
     Radius of the Earth is 6371 km
@@ -59,4 +61,3 @@ def convert_distance_to_degree(d, units):
         d /= (6371. / 1.1119) * 0.621371
     d = rad_to_deg(d)
     return d
-
