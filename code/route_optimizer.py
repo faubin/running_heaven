@@ -3,22 +3,23 @@ import heapq
 import copy
 import pandas as pd
 import geopandas as gpd
-try:
-    import matplotlib.pyplot as pl
-except ImportError:
-    print('Warning: matplolib failed to run, run the app with show=False.')
 import numpy as np
 import running_heaven.code.names as names
 import running_heaven.code.angles as angles
 import running_heaven.code.locations as locations
 from running_heaven.code import core
+from running_heaven.code import data_handler
 import pdb
+import os
+import itertools
+try:
+    import matplotlib.pyplot as pl
+except ImportError:
+    print('Warning: matplolib failed to run, run the app with show=False.')
 try:
     import pulp
 except ImportError:
     print('Warning: pulp was not imported, but it is not needed by default')
-import os
-import itertools
 
 
 class RunRouteOptimizer(core.HeavenCore):
@@ -28,6 +29,7 @@ class RunRouteOptimizer(core.HeavenCore):
         """
         """
         core.HeavenCore.__init__(self)
+        self.data_hand = data_handler.DataHandler()
         self.show = show
         return
 
@@ -291,20 +293,10 @@ class RunRouteOptimizer(core.HeavenCore):
         return
 
     def plot_route(self, dfs, intersection_names, start_point, end_point,
-                   new_df2, path_indices):
+                   df, path_indices):
 
-        # plotting the map
-        fig, ax2 = pl.subplots(figsize=(12, 9))
-        colors = 'yrb'
-        for n_key, key_ in enumerate(['park', 'street', 'sidewalk']):
-            dfs[key_].plot(ax=ax2, color=colors[n_key])
-        pl.plot(dfs['tree']['longitude'], dfs['tree']['latitude'], '.g',
-                markersize=2)
-        pl.xlabel('Longitude ($^o$)', fontsize=20)
-        pl.ylabel('Latitude ($^o$)', fontsize=20)
-        pl.xticks(fontsize=16)
-        pl.yticks(fontsize=16)
-        # pl.title('NYC Map of Running Areas', fontsize=20)
+        ax = self.data_hand.plot_raw_data(dfs, xlim=[-73.985, -73.955],
+                                          ylim=[40.760, 40.785])
 
         # plots starting and end point
         lon_start, lat_start = names.name_to_lon_lat(start_point)
@@ -319,11 +311,9 @@ class RunRouteOptimizer(core.HeavenCore):
 
         # plotting the route
         if path_indices is not None:
-            new_gdf2 = gpd.GeoDataFrame(new_df2)
+            new_gdf2 = gpd.GeoDataFrame(df)
             new_gdf2_path = new_gdf2.iloc[np.array(path_indices)]
-            new_gdf2_path.plot(ax=ax2, color='k', linewidth=4)
-        pl.xlim([-73.985, -73.955])
-        pl.ylim([40.760, 40.785])
+            new_gdf2_path.plot(ax=ax, color='k', linewidth=4)
         pl.savefig('path_run.png')
         # pl.savefig('../app/flaskexample/static/path_run.png')
         return
@@ -399,18 +389,12 @@ class RunRouteOptimizer(core.HeavenCore):
     def run(self, pts, target_dist, units='km', type_=1, cost_weights=None):
         """
         """
-        full_file_path = os.path.join(self.running_heaven_path, 'data',
-                                      'processed', 'route_connections.geojson')
-        new_df2 = gpd.read_file(full_file_path)
-        new_df2.rename(index=str, columns={'vertex_sta': 'vertex_start',
-                                           'tree_numbe': 'tree_number',
-                                           'tree_densi': 'tree_density',
-                                           'min_dist_t': 'min_dist_to_park'},
-                       inplace=True)
+        df_proc = self.data_hand.load_processed_data()
+
 
         # list of all possible intersections
-        intersection_names = list(new_df2['vertex_start'].values)
-        intersection_names += list(new_df2['vertex_end'].values)
+        intersection_names = list(df_proc['vertex_start'].values)
+        intersection_names += list(df_proc['vertex_end'].values)
         intersection_names = list(set(intersection_names))
 
         # get closest intersection to provided points
@@ -432,37 +416,37 @@ class RunRouteOptimizer(core.HeavenCore):
         dfs['tree'] = pd.read_csv(os.path.join(processed_path, 'tree.csv'))
 
         # updating dataframe
-        new_df2['tree_density_weight'] = 1. - new_df2['tree_density']
+        df_proc['tree_density_weight'] = 1. - df_proc['tree_density']
         target_dist_deg = angles.convert_distance_to_degree(target_dist, units)
-        park_weight = self.define_park_weight(new_df2,  # dfs['park'],
+        park_weight = self.define_park_weight(df_proc,  # dfs['park'],
                                               target_dist_deg)
-        new_df2['park_weight'] = park_weight
+        df_proc['park_weight'] = park_weight
 
         # distribution of features for debugging
         # self.feature_distributions(tree_density_norm, park_weight)
 
         # linear programming solution
         if type_ == 2:
-            path_indices, d_path = self.int_prog(new_df2, units, start_point,
+            path_indices, d_path = self.int_prog(df_proc, units, start_point,
                                                  end_point, target_dist,
                                                  dfs['park'])
         elif type_ == 1:
             # problem information for Dijkstra's algorithm
             edges = []
-            new_df3 = copy.deepcopy(new_df2)
+            new_df3 = copy.deepcopy(df_proc)
             st = copy.deepcopy(new_df3['vertex_start'])
             new_df3['vertex_start'] = copy.deepcopy(new_df3['vertex_end'])
             new_df3['vertex_end'] = copy.deepcopy(st)
-            new_df2 = new_df2.append(new_df3)
-            for i in range(len(new_df2.index)):
+            df_proc = df_proc.append(new_df3)
+            for i in range(len(df_proc.index)):
                 # distance - shortest path
-                edges.append((new_df2['vertex_start'].iloc[i],  # starting point
-                              new_df2['vertex_end'].iloc[i],  # end point
+                edges.append((df_proc['vertex_start'].iloc[i],  # starting point
+                              df_proc['vertex_end'].iloc[i],  # end point
                               0.,  # cost, updated automatically
-                              {'distance': new_df2['distance'].iloc[i],
-                               'tree_density_weight': new_df2['tree_density_weight'].iloc[i],
-                               'park_weight': new_df2['park_weight'].iloc[i],
-                               'intersection': int(new_df2['type'].iloc[i] == 'street'),
+                              {'distance': df_proc['distance'].iloc[i],
+                               'tree_density_weight': df_proc['tree_density_weight'].iloc[i],
+                               'park_weight': df_proc['park_weight'].iloc[i],
+                               'intersection': int(df_proc['type'].iloc[i] == 'street'),
                                }
                               ))
 
@@ -493,16 +477,17 @@ class RunRouteOptimizer(core.HeavenCore):
                 if opt_path[0] == 0.:
                     print('Warning: impossible route')
                     self.plot_route(dfs, intersection_names, start_point,
-                                    end_point, new_df2, None)
+                                    end_point, df_proc, None)
                     return None, None
                 # get indices from path
                 path_indices, d_path = self.get_indices_from_path(opt_path,
                                                                   start_point,
-                                                                  new_df2)
+                                                                  df_proc)
                 d_path = angles.convert_distance_to_physical(d_path, units)
                 path_indices_list.append(path_indices)
                 d_path_list.append(d_path)
                 cost_list.append(opt_path[0])
+                print(weight, cost_list[-1], d_path)
 
             n = np.argmin(abs(np.array(d_path_list) - target_dist))
             # n = np.argmin(cost_list)
@@ -515,7 +500,7 @@ class RunRouteOptimizer(core.HeavenCore):
         # plotting the data and route
         if self.show:
             self.plot_route(dfs, intersection_names, start_point, end_point,
-                            new_df2, path_indices)
+                            df_proc, path_indices)
 
         # resulting distance
         print('Total distance is : {0:f} {1:s}'.format(d_path, units))
@@ -524,7 +509,7 @@ class RunRouteOptimizer(core.HeavenCore):
         if self.show:
             pl.show()
 
-        route_lon_lat = self.get_route(new_df2, path_indices, start_point,
+        route_lon_lat = self.get_route(df_proc, path_indices, start_point,
                                        end_point)
 
         return d_path, route_lon_lat
@@ -537,9 +522,9 @@ if __name__ == "__main__":
     # pts = ('-73.994_40.740', '-73.995_40.749')
 
     # central park
-    # pts = ('-73.967_40.763', '-73.979_40.777')  # SE to NW of CP
+    pts = ('-73.967_40.763', '-73.979_40.777')  # SE to NW of CP
     # pts = ('-73.967_40.763', '-73.967_40.764')  # SE to SE of CP
-    pts = ('-73.976_40.766', '-73.980_40.769')  # loop in CP
+    # pts = ('-73.976_40.766', '-73.980_40.769')  # loop in CP
 
     # south Mahattan
     # pts = ('-73.988_40.729', '-73.996_40.722')  #
@@ -548,8 +533,8 @@ if __name__ == "__main__":
     # one point is sidewalk in Brooklyn
     # pts=('40.776112_-73.979746', '40.778238_-73.971427')
 
-    # target_dist = 3.
-    target_dist = 5.
+    target_dist = 3.
+    # target_dist = 5.
 
     units = 'km'
     # units = 'miles'
