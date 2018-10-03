@@ -292,32 +292,6 @@ class RunRouteOptimizer(core.HeavenCore):
         pl.close(1)
         return
 
-    def plot_route(self, dfs, intersection_names, start_point, end_point,
-                   df, path_indices):
-
-        ax = self.data_hand.plot_raw_data(dfs, xlim=[-73.985, -73.955],
-                                          ylim=[40.760, 40.785])
-
-        # plots starting and end point
-        lon_start, lat_start = names.name_to_lon_lat(start_point)
-        pl.plot(lon_start, lat_start, 'sc', markersize=12)
-        lon_end, lat_end = names.name_to_lon_lat(end_point)
-        pl.plot(lon_end, lat_end, 'oc', markersize=12)
-
-        # black dot on all intersections
-        # for i in intersection_names:
-        #     lon, lat = names.name_to_lon_lat(i)
-        #     pl.plot(lon, lat, '.k')
-
-        # plotting the route
-        if path_indices is not None:
-            new_gdf2 = gpd.GeoDataFrame(df)
-            new_gdf2_path = new_gdf2.iloc[np.array(path_indices)]
-            new_gdf2_path.plot(ax=ax, color='k', linewidth=4)
-        pl.savefig('path_run.png')
-        # pl.savefig('../app/flaskexample/static/path_run.png')
-        return
-
     def find_vertex_index(self, df, pt1, pt2):
         """
         """
@@ -476,8 +450,8 @@ class RunRouteOptimizer(core.HeavenCore):
 
                 if opt_path[0] == 0.:
                     print('Warning: impossible route')
-                    self.plot_route(dfs, intersection_names, start_point,
-                                    end_point, df_proc, None)
+                    self.data_hand.plot_route(dfs, start_point, end_point,
+                                              df_proc, path_indices)
                     return None, None
                 # get indices from path
                 path_indices, d_path = self.get_indices_from_path(opt_path,
@@ -499,8 +473,10 @@ class RunRouteOptimizer(core.HeavenCore):
 
         # plotting the data and route
         if self.show:
-            self.plot_route(dfs, intersection_names, start_point, end_point,
-                            df_proc, path_indices)
+            self.data_hand.plot_route(dfs, start_point, end_point, df_proc,
+                                      path_indices)
+            #self.plot_route(dfs, intersection_names, start_point, end_point,
+            #                df_proc, path_indices)
 
         # resulting distance
         print('Total distance is : {0:f} {1:s}'.format(d_path, units))
@@ -522,9 +498,10 @@ if __name__ == "__main__":
     # pts = ('-73.994_40.740', '-73.995_40.749')
 
     # central park
-    pts = ('-73.967_40.763', '-73.979_40.777')  # SE to NW of CP
+    # pts = ('-73.967_40.763', '-73.979_40.777')  # SE to NW of CP
     # pts = ('-73.967_40.763', '-73.967_40.764')  # SE to SE of CP
-    # pts = ('-73.976_40.766', '-73.980_40.769')  # loop in CP
+    # loops in central park
+    pts = ('-73.976_40.766', '-73.980_40.769')  # loop in CP
 
     # south Mahattan
     # pts = ('-73.988_40.729', '-73.996_40.722')  #
@@ -534,7 +511,6 @@ if __name__ == "__main__":
     # pts=('40.776112_-73.979746', '40.778238_-73.971427')
 
     target_dist = 3.
-    # target_dist = 5.
 
     units = 'km'
     # units = 'miles'

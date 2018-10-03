@@ -1,11 +1,13 @@
-from running_heaven.code import core
+import geopandas as gpd
+import numpy as np
 import os
+import pandas as pd
 try:
     import pylab as pl
 except ImportError:
     print('Warning: matplolib failed to load')
-import pandas as pd
-import geopandas as gpd
+from running_heaven.code import names
+from running_heaven.code import core
 
 
 class DataHandler(core.HeavenCore):
@@ -28,20 +30,26 @@ class DataHandler(core.HeavenCore):
         dfs['tree'] = pd.read_csv(os.path.join(path, 'tree.csv'))
         return dfs
 
-    def plot_raw_data(self, dfs, xlim=None, ylim=None, show=False):
+    def plot_raw_data(self, dfs, xlim=None, ylim=None, dim_colors=False,
+                      show=False):
         """
         """
-        colors = {'park': 'y', 'street': 'r', 'sidewalk': 'b', 'tree': '.g'}
+        if dim_colors:
+            colors = {'park': '#ffff80','street': '#ff9980',
+                      'sidewalk': '#8080ff', 'tree': '#009933'}
+        else:
+            colors = {'park': '#e6e600', 'street': '#ff3300',
+                      'sidewalk': '#0000ff', 'tree': '#009933'}
 
         # plotting the map
         fig, ax = pl.subplots(figsize=(12, 9))
         for n_key, data_type in enumerate(dfs.keys()):
             if data_type not in colors.keys():
-                raise ValueError('A color need to be defined for plotting')
-            if len(colors[data_type]) > 1:
-                ax.plot(dfs[data_type]['longitude'],
-                        dfs[data_type]['latitude'], colors[data_type],
-                        markersize=2)
+                raise ValueError('The color for plotting {0:s} is not \
+                                  defined'.format(data_type))
+            if data_type == 'tree':
+                dfs[data_type].plot.scatter('longitude', 'latitude', 2,
+                                            colors[data_type], ax=ax)
             else:
                 dfs[data_type].plot(ax=ax, color=colors[data_type])
         pl.xlabel('Longitude ($^o$)', fontsize=20)
@@ -55,6 +63,35 @@ class DataHandler(core.HeavenCore):
             pl.ylim(ylim)
 
         return ax
+
+    def plot_route(self, map_components, start_point, end_point, segments,
+                   path_indices):
+        """
+        map_components is a pd.DataFrame with the raw NYC data
+        start_point and end_point are str with the form lon_lat
+        segments is a pd.DataFrame with the processed segments
+        path indices is a list of the rows in segments that are part of the
+        route
+        """
+        # plotting the map
+        ax = self.plot_raw_data(map_components, xlim=[-73.985, -73.955],
+                                          ylim=[40.760, 40.785],
+                                          dim_colors=True)
+
+        # plots starting and end point
+        lon_start, lat_start = names.name_to_lon_lat(start_point)
+        pl.plot(lon_start, lat_start, 's', color='#ff33cc', markersize=12)
+        lon_end, lat_end = names.name_to_lon_lat(end_point)
+        pl.plot(lon_end, lat_end, 'o', color='#ff33cc', markersize=12)
+
+        # plotting the route
+        if path_indices is not None:
+            segments_gpd = gpd.GeoDataFrame(segments)
+            route = segments_gpd.iloc[np.array(path_indices)]
+            route.plot(ax=ax, color='k', linewidth=4)
+        pl.savefig('path_run.png')
+        # pl.savefig('../app/flaskexample/static/path_run.png')
+        return
 
     def load_processed_data(self):
         """
