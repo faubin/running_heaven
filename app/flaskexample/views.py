@@ -42,9 +42,16 @@ def output():
         length = '3.'
     length = float(length)
 
+    # sets the weight to 0 if a preference is not checked
+    cost_weights = [np.nan] * 5
+    for n_weight_type, weight_type in enumerate(['parks', 'trees',
+                                                 'intersections']):
+        if not request.values.has_key(weight_type):
+            cost_weights[2+n_weight_type] = 0.
+
     # run the optimizer
     route_app = route_optimizer.RunRouteOptimizer(show=False)
-    d, path = route_app.run(pt, length)
+    d, path = route_app.run(pt, length, cost_weights=cost_weights)
 
     # point to zoom on with Google Map
     center_lat = np.array(path)[:, 0].astype(float).mean()
