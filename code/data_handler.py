@@ -1,6 +1,9 @@
 from running_heaven.code import core
 import os
-import pylab as pl
+try:
+    import pylab as pl
+except ImportError:
+    print('Warning: matplolib failed to load')
 import pandas as pd
 import geopandas as gpd
 
