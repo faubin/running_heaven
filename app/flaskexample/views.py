@@ -25,15 +25,22 @@ def output():
 
     # starting point
     pt1_address = request.args.get('pt1')
+    if pt1_address == '':
+        pt1_address = 'Lexington Ave. and 62nd St.'
     pt1 = gmaps.get_lon_lat_from_address(pt1_address + ', Manhattan, NY')
     # end point
     pt2_address = request.args.get('pt2')
+    if pt2_address == '':
+        pt2_address = 'Park Ave. and 73rd St.'
     pt2 = gmaps.get_lon_lat_from_address(pt2_address + ', Manhattan, NY')
     # combined points
     pt = (pt1, pt2)
 
     # distance to run
-    length = float(request.args.get('length'))
+    length = request.args.get('length')
+    if length == '':
+        length = '3.'
+    length = float(length)
 
     # run the optimizer
     route_app = route_optimizer.RunRouteOptimizer(show=False)
