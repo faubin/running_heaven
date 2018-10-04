@@ -429,6 +429,7 @@ class RunRouteOptimizer(core.HeavenCore):
             weights = [np.array(p) for p in itertools.product(choices,
                                                               repeat=5)]
             # set fixed values if provides
+            # distance, spiral, tree, park, intersection
             if cost_weights is not None:
                 fixed = ~np.isnan(cost_weights)
                 for i in range(len(weights)):
@@ -465,7 +466,7 @@ class RunRouteOptimizer(core.HeavenCore):
 
             n = np.argmin(abs(np.array(d_path_list) - target_dist))
             # n = np.argmin(cost_list)
-            print(n, weights[n])
+            # print(n, weights[n])
             d_path = d_path_list[n]
             path_indices = path_indices_list[n]
         else:
@@ -498,10 +499,10 @@ if __name__ == "__main__":
     # pts = ('-73.994_40.740', '-73.995_40.749')
 
     # central park
-    # pts = ('-73.967_40.763', '-73.979_40.777')  # SE to NW of CP
+    pts = ('-73.967_40.763', '-73.979_40.777')  # SE to NW of CP
     # pts = ('-73.967_40.763', '-73.967_40.764')  # SE to SE of CP
     # loops in central park
-    pts = ('-73.976_40.766', '-73.980_40.769')  # loop in CP
+    # pts = ('-73.976_40.766', '-73.980_40.769')  # loop in CP
 
     # south Mahattan
     # pts = ('-73.988_40.729', '-73.996_40.722')  #
@@ -509,6 +510,15 @@ if __name__ == "__main__":
 
     # one point is sidewalk in Brooklyn
     # pts=('40.776112_-73.979746', '40.778238_-73.971427')
+
+    cost_weights = [np.nan, np.nan, np.nan, np.nan, np.nan]
+    # cost_weights = [np.nan, np.nan, 0., np.nan, np.nan]
+    # cost_weights = [np.nan, np.nan, np.nan, 0., np.nan]
+    # cost_weights = [np.nan, np.nan, np.nan, np.nan, 0.]
+    # cost_weights = [np.nan, np.nan, 0., 0., np.nan]
+    # cost_weights = [np.nan, np.nan, 0., np.nan, 0.]
+    # cost_weights = [np.nan, np.nan, np.nan, 0., 0.]
+    # cost_weights = [np.nan, np.nan, 0., 0., 0.]
 
     target_dist = 3.
 
@@ -519,4 +529,4 @@ if __name__ == "__main__":
     # type_ = 2  # intger programming, slow and has problems
 
     app = RunRouteOptimizer()
-    d = app.run(pts, target_dist, units, type_)
+    d = app.run(pts, target_dist, units, type_, cost_weights=cost_weights)

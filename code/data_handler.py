@@ -2,6 +2,7 @@ import geopandas as gpd
 import numpy as np
 import os
 import pandas as pd
+import pdb
 try:
     import pylab as pl
 except ImportError:
@@ -63,6 +64,48 @@ class DataHandler(core.HeavenCore):
             pl.ylim(ylim)
 
         return ax
+
+    def plot_raw_data_step_by_step(self, dfs, xlim=None, ylim=None):
+        """
+        """
+        colors = {'dim': {'park': '#ffff80','street': '#ff9980',
+                          'sidewalk': '#8080ff', 'tree': '#009933'},
+                  'standard': {'park': '#e6e600', 'street': '#ff3300',
+                               'sidewalk': '#0000ff', 'tree': '#009933'}}
+
+        data_types = ['park', 'street', 'sidewalk', 'tree']
+
+        for n_data_type in range(1, len(data_types)+1):
+
+            fig, ax = pl.subplots(figsize=(12, 9))
+            for n_iter, data_type in enumerate(data_types[:n_data_type]):
+                color_type = 'dim'
+                #if n_data_type == n_iter + 1:
+                #    color_type = 'standard'
+                #else:
+                #    color_type = 'dim'
+
+                if data_type not in colors[color_type].keys():
+                    raise ValueError('The color for plotting {0:s} is not \
+                                      defined'.format(data_type))
+                if data_type == 'tree':
+                    dfs[data_type].plot.scatter('longitude', 'latitude', 2,
+                                                colors[color_type][data_type],
+                                                ax=ax)
+                else:
+                    dfs[data_type].plot(ax=ax,
+                                        color=colors[color_type][data_type])
+            pl.xlabel('Longitude ($^o$)', fontsize=20)
+            pl.ylabel('Latitude ($^o$)', fontsize=20)
+            pl.xticks(fontsize=16)
+            pl.yticks(fontsize=16)
+
+            if xlim is not None and type(xlim) == list:
+                pl.xlim(xlim)
+            if ylim is not None and type(ylim) == list:
+                pl.ylim(ylim)
+            pl.savefig('raw_data_{0:d}.png'.format(n_data_type))
+            pl.close()
 
     def plot_route(self, map_components, start_point, end_point, segments,
                    path_indices):
