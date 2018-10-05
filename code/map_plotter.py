@@ -4,7 +4,6 @@ A library to plot maps and routes
 """
 import geopandas as gpd
 import numpy as np
-import pandas as pd
 import pylab as pl
 from running_heaven.code import names
 
@@ -12,12 +11,14 @@ from running_heaven.code import names
 def plot_raw_data(map_components, xlim=None, ylim=None, show=False):
     """
     Plots a map of the raw data.
+
     Inputs:
         map_components is a dictionary of pd.DataFrames (the output of
             data_handler.load_raw_data())
         xlim and ylim are list to force the axis of the map, default shows
             the whole map
         show is a booleand to show or not the map
+
     Return:
         the figure handles
     """
@@ -103,11 +104,14 @@ def plot_raw_data_step_by_step(map_components, xlim=None, ylim=None):
 
 def plot_route(map_components, route_ends, segments, path_indices):
     """
-    map_components is a pd.DataFrame with the raw NYC data
-    route_ends is a list of 2 str with the form lon_lat each
-    segments is a pd.DataFrame with the processed segments
-    path indices is a list of the rows in segments that are part of the
-    route
+    Plot a route on top of a (already) plotted map
+
+    Inputs:
+        map_components is a pd.DataFrame with the raw NYC data
+        route_ends is a list of 2 str with the form lon_lat each
+        segments is a pd.DataFrame with the processed segments
+        path indices is a list of the rows in segments that are part of the
+            route
     """
     # plotting the map
     subplot_axes = plot_raw_data(map_components)  # ,
@@ -126,5 +130,3 @@ def plot_route(map_components, route_ends, segments, path_indices):
         route = segments_gpd.iloc[np.array(path_indices)]
         route.plot(ax=subplot_axes, color='k', linewidth=4)
     pl.savefig('path_run.png')
-    # pl.savefig('../app/flaskexample/static/path_run.png')
-    return
