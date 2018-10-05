@@ -1,8 +1,10 @@
 from flask import render_template
 from flask import request
 from flaskexample import app
-import running_heaven.code.route_optimizer as route_optimizer
-import running_heaven.code.google_map_api as google_map_api
+from running_heaven.code.lib import data_handler
+from running_heaven.code.lib import locations
+from running_heaven.code import route_optimizer
+from running_heaven.code.lib import google_map_api
 import numpy as np
 
 
@@ -23,24 +25,32 @@ def output():
     # object to interact with Google Map API
     gmaps = google_map_api.GoogleMapApi()
 
-    # starting point
-    pt1_address = request.args.get('pt1')
-    if pt1_address == '':
-        pt1_address = 'Lexington Ave. and 62nd St.'
-    pt1 = gmaps.get_lon_lat_from_address(pt1_address + ', Manhattan, NY')
-    # end point
-    pt2_address = request.args.get('pt2')
-    if pt2_address == '':
-        pt2_address = 'Lexington Ave. and 63rd St.'
-    pt2 = gmaps.get_lon_lat_from_address(pt2_address + ', Manhattan, NY')
-    # combined points
-    pt = (pt1, pt2)
-
     # distance to run
     length = request.args.get('length')
     if length == '':
         length = '5.'
     length = float(length)
+
+    # starting point
+    pt1_address = request.args.get('pt1')
+    if pt1_address == '':
+        pt1_address = 'Lexington Ave. and 62nd St.'
+    pt1 = gmaps.get_lon_lat_from_address(pt1_address + ', Manhattan, NY')
+
+    # end point
+    if request.values.has_key('random'):
+        data_hand = data_handler.DataHandler()
+        segments = data_hand.load_processed_data()
+        pt2 = locations.select_random_point(segments, pt1, length)
+        # pt2_address = gmaps.get_address_from_lon_lat(pt2)
+        pt2_address = ''
+    else:
+        pt2_address = request.args.get('pt2')
+        if pt2_address == '':
+            pt2_address = 'Lexington Ave. and 63rd St.'
+        pt2 = gmaps.get_lon_lat_from_address(pt2_address + ', Manhattan, NY')
+    # combined points
+    pt = (pt1, pt2)
 
     # sets the weight to 0 if a preference is not checked
     cost_weights = [np.nan] * 5
@@ -51,7 +61,9 @@ def output():
 
     # run the optimizer
     route_app = route_optimizer.RunRouteOptimizer(show=False)
-    d, path = route_app.run(pt, length, cost_weights=cost_weights)
+    route_results = route_app.run(pt, length, cost_weights=cost_weights)
+    d = route_results[0]
+    path = route_results[1]
 
     # point to zoom on with Google Map
     center_lat = np.array(path)[:, 0].astype(float).mean()
