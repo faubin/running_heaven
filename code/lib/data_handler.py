@@ -100,8 +100,9 @@ class DataHandler(core.HeavenCore):
                                    np.array(lat_list) == lat_closest)
             selected_index.append(np.where(index)[0][0])
 
-        unique_index_list = set(np.array(index_list)[np.array(selected_index)])
-        selected_segments = segments.iloc[sorted([i for i in unique_index_list])]
+        unique_index_set = set(np.array(index_list)[np.array(selected_index)])
+        unique_index_list = sorted([index for index in unique_index_set])
+        selected_segments = segments.iloc[unique_index_list]
 
         return selected_segments
 

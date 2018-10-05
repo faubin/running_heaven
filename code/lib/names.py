@@ -1,3 +1,9 @@
+#!/usr/bin/env
+"""
+This is a library to convert names to longitude and latitude, and vice versa
+"""
+
+
 def lon_lat_to_name(lon, lat):
     """
     converts lon (float) and lat (float) to 'lon_lat'

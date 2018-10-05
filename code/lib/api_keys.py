@@ -1,3 +1,7 @@
+#!/usr/bin/env
+"""
+This class loads api keys
+"""
 import os
 from running_heaven.code.lib import core
 
@@ -25,12 +29,11 @@ class ApiKeys(core.HeavenCore):
 
         # load the API key
         full_key_file_name = os.path.join(path, key_file_name)
-        f = open(full_key_file_name, 'r')
-        api_key = f.readline()
-        f.close()
+        with open(full_key_file_name, 'r') as key_file:
+            api_key = key_file.readline()
 
         return api_key
 
 if __name__ == "__main__":
-    app = ApiKeys()
-    print(app.running_heaven_path)
+    APP = ApiKeys()
+    print(APP.running_heaven_path)
