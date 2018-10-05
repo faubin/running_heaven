@@ -2,10 +2,10 @@
 """
 A library to plot maps and routes
 """
-import pylab as pl
-import numpy as np
 import geopandas as gpd
+import numpy as np
 import pandas as pd
+import pylab as pl
 from running_heaven.code import names
 
 
@@ -54,6 +54,7 @@ def plot_raw_data(map_components, xlim=None, ylim=None, show=False):
         pl.show()
     return subplot_axes
 
+
 def plot_raw_data_step_by_step(map_components, xlim=None, ylim=None):
     """
     Plot the data layer by layer and saving the figures
@@ -99,6 +100,7 @@ def plot_raw_data_step_by_step(map_components, xlim=None, ylim=None):
         pl.savefig('raw_data_{0:d}.png'.format(n_data_type))
         pl.close()
 
+
 def plot_route(map_components, route_ends, segments, path_indices):
     """
     map_components is a pd.DataFrame with the raw NYC data
@@ -126,4 +128,3 @@ def plot_route(map_components, route_ends, segments, path_indices):
     pl.savefig('path_run.png')
     # pl.savefig('../app/flaskexample/static/path_run.png')
     return
-
