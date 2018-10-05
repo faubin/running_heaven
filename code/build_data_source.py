@@ -1,15 +1,17 @@
 #! /usr/bin/env python
-import os
+import angles
 import ast
 import geopandas as gpd
+import names
+import os
 import pandas as pd
+import pdb
 import pylab as pl
 import requests
-import angles
-import names
-import pdb
-import time
 import running_heaven
+from running_heaven.code import data_handler
+from shapely import geometry
+import time
 
 
 class DataBuilder():
@@ -65,7 +67,7 @@ class DataBuilder():
         #     https://dev.socrata.com/consumers/getting-started.html)
         # see https://dev.socrata.com/docs/queries/offset.html for how to
         #     offset and get the whole list
-        #query_limit = 25000  # absolute limit is 50 000
+        # query_limit = 25000  # absolute limit is 50 000
 
         # query loop until receiving all the trees
         i = 0
@@ -112,7 +114,7 @@ class DataBuilder():
         y2 = geom.boundary[1].y
         # r2 = ((x2-x1)**2 + (y2-y1)**2) / 4.
         r2 = 0.0008212487130291317**2
-        #print(((x2-x1)**2 + (y2-y1)**2) / 4. )
+        # print(((x2-x1)**2 + (y2-y1)**2) / 4. )
 
         inside = (df['longitude'] - x0)**2 + (df['latitude']-y0)**2 <= r2
         return inside.sum()
@@ -126,55 +128,43 @@ class DataBuilder():
         dfs['park'] = dfs['park'].loc[dfs['park']['borough'] == self.borough]
         dfs['street'] = dfs['street'].loc[dfs['street']['borocode'] == self.borough_code]
 
-        # sidewalks
-        if self.borough == 'M':
-            index_to_drop = []
-            for i in dfs['sidewalk'].index.values:
-                geom = dfs['sidewalk']['geometry'].iloc[i]
-                x0 = geom.representative_point().x
-                y0 = geom.representative_point().y
-                if x0 < -74.036 or x0 > -73.906 or y0 < 40.678 or y0 > 40.881:
-                    index_to_drop.append(i)
-        else:
-            exit('Borough data selection failed. Only implemented for M')
-        dfs['sidewalk'].drop(index_to_drop, inplace=True)
+        # load borough boundary
+        boundary_file_name = os.path.join(self.running_heaven_path, 'raw_data',
+                                          'Borough Boundaries.geojson')
+        borough_limits = gpd.read_file(boundary_file_name)
+        is_borough_valid = borough_limits['boro_name'].values == self.borough_name
+        borough_geometry = borough_limits.iloc[is_borough_valid]['geometry'].iloc[0]
+
+        # identify the sidewalks outside of the borough
+        index_to_reject = []
+        for i in dfs['sidewalk'].index:
+            lon_deg = angles.rad_to_deg(dfs['sidewalk']['rep_x_rad'].iloc[i])
+            lat_deg = angles.rad_to_deg(dfs['sidewalk']['rep_y_rad'].iloc[i])
+            point = geometry.Point(lon_deg, lat_deg)
+            if not borough_geometry.contains(point):
+                index_to_reject.append(i)
+
+        dfs['sidewalk'].drop(index_to_reject, inplace=True)
+        dfs['sidewalk'].reset_index(drop=True, inplace=True)
 
         return dfs
 
-    def debug_plot(self, dfs):
+    def add_geometry_representative(self, dfs):
         """
+        adds columns to geometry DataFrames with a representative point in rad
         """
-        fig, ax1 = pl.subplots()
-        colors = 'ybrgmc'
-        for n_key, key_ in enumerate(dfs.keys()):
-            dfs[key_].plot(ax=ax1, color=colors[n_key])
-
-        # to do: remove data outside of proper borough
-        x_range = [-74.05, -73.9]
-        y_range = [40.65, 40.9]
-        x0 = pl.mean(x_range)
-        y0 = pl.mean(y_range)
-        dx = x_range[1] - x_range[0]
-        dy = y_range[1] - y_range[0]
-        dd = max([dx, dy]) / 2.
-        pl.xlim([x0-dd, x0+dd])
-        pl.ylim([y0-dd, y0+dd])
-        pl.xlabel('Longitude ($^o$)', fontsize=20)
-        pl.ylabel('Latitude ($^o$)', fontsize=20)
-        pl.xticks(fontsize=16)
-        pl.yticks(fontsize=16)
-        pl.title('NYC Map of Running Areas', fontsize=20)
-        pl.show()
-        return
+        for segment_type, df in dfs.items():
+            if not segment_type == 'tree':
+                rep_x_rad = [angles.deg_to_rad(df['geometry'].iloc[i].representative_point().x) for i in range(len(df.index))]
+                df['rep_x_rad'] = pd.Series(rep_x_rad, index=df.index)
+                rep_y_rad = [angles.deg_to_rad(df['geometry'].iloc[i].representative_point().y) for i in range(len(df.index))]
+                df['rep_y_rad'] = pd.Series(rep_y_rad, index=df.index)
+        return dfs
 
     def select_data(self, df, lon0_deg, lat0_deg, r_deg, exclude_data):
         """
         drops the data outside a radius r_deg around (lon0_deg, lat0_deg)
         """
-        rep_x_rad = [angles.deg_to_rad(df['geometry'].iloc[i].representative_point().x) for i in range(len(df.index))]
-        df['rep_x_rad'] = pd.Series(rep_x_rad, index=df.index)
-        rep_y_rad = [angles.deg_to_rad(df['geometry'].iloc[i].representative_point().y) for i in range(len(df.index))]
-        df['rep_y_rad'] = pd.Series(rep_y_rad, index=df.index)
 
         lon0 = angles.deg_to_rad(pl.float64(lon0_deg))  # lambda
         lat0 = angles.deg_to_rad(pl.float64(lat0_deg))  # phi
@@ -268,7 +258,7 @@ class DataBuilder():
                                                  data_for_df['lat_start'][-1]))
                 data_for_df['name_end'].append(names.lon_lat_to_name(data_for_df['lon_end'][-1], data_for_df['lat_end'][-1]))
                 data_for_df['geometry'].append(geom)
-                data_for_df['tree_number'].append(self.get_tree_density(geom,dfs['tree']))
+                data_for_df['tree_number'].append(self.get_tree_density(geom, dfs['tree']))
 
         for i in range(len(data_for_df['lon_start'])):
             for j in range(i+1, len(data_for_df['lon_start'])):
@@ -353,7 +343,7 @@ class DataBuilder():
         """
         write data to file for plotting when optimizing routes
         """
-        if not 'processed' in os.listdir(os.path.join(self.running_heaven_path,
+        if 'processed' not in os.listdir(os.path.join(self.running_heaven_path,
                                                       'data')):
             os.mkdir(os.path.join(self.running_heaven_path, 'data',
                                   'processed'))
@@ -381,7 +371,7 @@ class DataBuilder():
 
         # sidewalks wet to maximum
         max_density = max(dict_['tree_density'])
-        #dict_['tree_density'][is_sidewalk] = max_density
+        # dict_['tree_density'][is_sidewalk] = max_density
 
         # dict_['tree_density'] /= max(dict_['tree_density'])
         dict_['tree_density'] /= pl.percentile(dict_['tree_density'][is_street], 85.)
@@ -393,7 +383,6 @@ class DataBuilder():
         # randomize streets with 0 trees
         zero_tree = pl.array(dict_['tree_number']) == 0
         dict_['tree_density'][zero_tree] = 0.25+0.15*pl.randn(sum(zero_tree))
-
 
         # tree density defined as 1 in parks since no tree data there
         dict_['tree_density'][dict_['tree_density'] > 0.999] = 0.999
@@ -414,21 +403,23 @@ class DataBuilder():
             dict_['min_dist_to_park'].append(dist)
         return dict_
 
-
     def run(self):
         """
         Takes 20 minutes for Manhattan
         """
-        raw_data_dfs = self.load_raw_data()
-        data_dfs = self.select_data_for_borough(raw_data_dfs)
-        # self.debug_plot(data_dfs)
+        raw_map_components = self.load_raw_data()
+        map_components = self.add_geometry_representative(raw_map_components)
+        data_dfs = self.select_data_for_borough(map_components)
+
+        data_hand = data_handler.DataHandler()
+        data_hand.plot_raw_data(data_dfs)
 
         # include only data around central park for debugging
         # data_dfs = self.zoom_on_data(data_dfs, -73.97, 40.77, 0.01, False)
         # central park, small
         # data_dfs = self.zoom_on_data(data_dfs, -73.97, 40.77, 0.01, True)
         # central park, big
-        #data_dfs = self.zoom_on_data(data_dfs, -73.97, 40.77, 0.02, True)
+        # data_dfs = self.zoom_on_data(data_dfs, -73.97, 40.77, 0.02, True)
 
         # data_dfs = self.zoom_on_data(data_dfs, -73.994, 40.740, 0.01, False)
         # data_dfs = self.zoom_on_data(data_dfs, -73.994, 40.740, 0.01, True)
@@ -438,10 +429,8 @@ class DataBuilder():
         # data_dfs = self.zoom_on_data(data_dfs, -73.99, 40.73, 0.02, True)
 
         # need this to run to add features to the dfs
-        data_dfs = self.zoom_on_data(data_dfs, -73.97, 40.77, 1., False)
-
-        if 'rep_x_rad' not in data_dfs['park'].keys():
-            print('Warning: run zoom_on_data(), otherwise, missing column.')
+        # adds the rep_x_rad fields
+        # data_dfs = self.zoom_on_data(data_dfs, -73.97, 40.77, 1., False)
 
         self.write_processed_data_to_file(data_dfs)
 

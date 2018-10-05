@@ -9,6 +9,7 @@ import running_heaven.code.angles as angles
 import running_heaven.code.locations as locations
 from running_heaven.code import core
 from running_heaven.code import data_handler
+from running_heaven.code import map_plotter
 import pdb
 import os
 import itertools
@@ -365,20 +366,23 @@ class RunRouteOptimizer(core.HeavenCore):
         """
         df_proc = self.data_hand.load_processed_data()
 
-
         # list of all possible intersections
         intersection_names = list(df_proc['vertex_start'].values)
         intersection_names += list(df_proc['vertex_end'].values)
         intersection_names = list(set(intersection_names))
 
         # get closest intersection to provided points
-        pt1_lon, pt1_lat = names.name_to_lon_lat(pts[0])
-        pt2_lon, pt2_lat = names.name_to_lon_lat(pts[1])
-        start_point = locations.get_closest_point_to(pt1_lon, pt1_lat,
+        start_point_lon, start_point_lat = names.name_to_lon_lat(pts[0])
+        end_point_lon, end_point_lat = names.name_to_lon_lat(pts[1])
+        start_point = locations.get_closest_point_to(start_point_lon,
+                                                     start_point_lat,
                                                      intersection_names)
-        end_point = locations.get_closest_point_to(pt2_lon, pt2_lat,
+        end_point = locations.get_closest_point_to(end_point_lon,
+                                                   end_point_lat,
                                                    intersection_names)
-        print("Optimizing route from {0:s} to {1:s}".format(pts[0], pts[1]))
+        route_ends = [start_point, end_point]
+        print("Optimizing route from {0:s} to {1:s}".format(start_point,
+                                                            end_point))
 
         # load data for plotting
         dfs = {}
@@ -451,9 +455,8 @@ class RunRouteOptimizer(core.HeavenCore):
 
                 if opt_path[0] == 0.:
                     print('Warning: impossible route')
-                    self.data_hand.plot_route(dfs, start_point, end_point,
-                                              df_proc, path_indices)
-                    return None, None
+                    return None, None, None
+
                 # get indices from path
                 path_indices, d_path = self.get_indices_from_path(opt_path,
                                                                   start_point,
@@ -462,7 +465,7 @@ class RunRouteOptimizer(core.HeavenCore):
                 path_indices_list.append(path_indices)
                 d_path_list.append(d_path)
                 cost_list.append(opt_path[0])
-                print(weight, cost_list[-1], d_path)
+                # print(weight, cost_list[-1], d_path)
 
             n = np.argmin(abs(np.array(d_path_list) - target_dist))
             # n = np.argmin(cost_list)
@@ -474,10 +477,7 @@ class RunRouteOptimizer(core.HeavenCore):
 
         # plotting the data and route
         if self.show:
-            self.data_hand.plot_route(dfs, start_point, end_point, df_proc,
-                                      path_indices)
-            #self.plot_route(dfs, intersection_names, start_point, end_point,
-            #                df_proc, path_indices)
+            map_plotter.plot_route(dfs, route_ends, df_proc, path_indices)
 
         # resulting distance
         print('Total distance is : {0:f} {1:s}'.format(d_path, units))
@@ -489,7 +489,7 @@ class RunRouteOptimizer(core.HeavenCore):
         route_lon_lat = self.get_route(df_proc, path_indices, start_point,
                                        end_point)
 
-        return d_path, route_lon_lat
+        return d_path, route_lon_lat, df_proc.iloc[path_indices]
 
 if __name__ == "__main__":
     # pt1 = Lexington Ave & E 61st St, New York, NY 10065
