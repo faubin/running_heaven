@@ -1,6 +1,6 @@
 import numpy as np
-import running_heaven.code.angles as angles
-import running_heaven.code.names as names
+from running_heaven.code.lib import angles
+from running_heaven.code.lib import names
 
 
 def get_closest_point_to(lon0, lat0, intersection_list):
