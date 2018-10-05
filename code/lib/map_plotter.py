@@ -4,7 +4,10 @@ A library to plot maps and routes
 """
 import geopandas as gpd
 import numpy as np
-import pylab as pl
+try:
+    import pylab as pl
+except ImportError:
+    print('Warning: pylab failed to load')
 from running_heaven.code.lib import names
 
 
