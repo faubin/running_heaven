@@ -1,6 +1,5 @@
-import running_heaven
-from running_heaven.code import core
 import os
+from running_heaven.code.lib import core
 
 
 class ApiKeys(core.HeavenCore):

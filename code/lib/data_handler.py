@@ -8,7 +8,7 @@ import geopandas as gpd
 import numpy as np
 import pandas as pd
 import shapely
-from running_heaven.code import core
+from running_heaven.code.lib import core
 
 
 class DataHandler(core.HeavenCore):

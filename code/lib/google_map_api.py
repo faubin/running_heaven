@@ -1,6 +1,6 @@
 import googlemaps
 import os
-from running_heaven.code import api_keys
+from running_heaven.code.lib import api_keys
 
 
 class GoogleMapApi(api_keys.ApiKeys):

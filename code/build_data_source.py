@@ -1,5 +1,4 @@
 #! /usr/bin/env python
-import angles
 import ast
 import geopandas as gpd
 import names
@@ -9,9 +8,10 @@ import pdb
 import pylab as pl
 import requests
 import running_heaven
-from running_heaven.code import data_handler
 from shapely import geometry
 import time
+from running_heaven.code import angles
+from running_heaven.code import data_handler
 
 
 class DataBuilder():

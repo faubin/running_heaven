@@ -5,7 +5,7 @@ A library to plot maps and routes
 import geopandas as gpd
 import numpy as np
 import pylab as pl
-from running_heaven.code import names
+from running_heaven.code.lib import names
 
 
 def plot_raw_data(map_components, xlim=None, ylim=None, show=False):

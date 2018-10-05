@@ -1,18 +1,18 @@
 from collections import defaultdict
-import heapq
 import copy
-import pandas as pd
 import geopandas as gpd
 import numpy as np
-import running_heaven.code.names as names
-import running_heaven.code.angles as angles
-import running_heaven.code.locations as locations
-from running_heaven.code import core
-from running_heaven.code import data_handler
-from running_heaven.code import map_plotter
-import pdb
-import os
+import heapq
 import itertools
+import os
+import pandas as pd
+import pdb
+from running_heaven.code.lib import angles
+from running_heaven.code.lib import core
+from running_heaven.code.lib import data_handler
+from running_heaven.code.lib import locations
+from running_heaven.code.lib import map_plotter
+from running_heaven.code.lib import names
 try:
     import matplotlib.pyplot as pl
 except ImportError:
