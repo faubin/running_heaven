@@ -8,6 +8,10 @@ from running_heaven.code.lib import google_map_api
 import numpy as np
 
 
+data_hand = data_handler.DataHandler()
+segments = data_hand.load_processed_data()
+
+
 @app.route('/')
 @app.route('/input')
 def input():
@@ -31,6 +35,12 @@ def output():
         length = '5.'
     length = float(length)
 
+    # distance units
+    if request.values['units'] == 'km':
+        units = 'km'
+    elif request.values['units'] == 'miles':
+        units = 'miles'
+
     # starting point
     pt1_address = request.args.get('pt1')
     if pt1_address == '':
@@ -39,8 +49,6 @@ def output():
 
     # end point
     if request.values.has_key('random'):
-        data_hand = data_handler.DataHandler()
-        segments = data_hand.load_processed_data()
         pt2 = locations.select_random_point(segments, pt1, length)
         # pt2_address = gmaps.get_address_from_lon_lat(pt2)
         pt2_address = ''
@@ -61,7 +69,7 @@ def output():
 
     # run the optimizer
     route_app = route_optimizer.RunRouteOptimizer(show=False)
-    route_results = route_app.run(pt, length, cost_weights=cost_weights)
+    route_results = route_app.run(pt, length, units, cost_weights=cost_weights)
     d = route_results[0]
     path = route_results[1]
 
@@ -79,4 +87,5 @@ def output():
                            start_point=pt1_address,
                            end_point=pt2_address,
                            length=length,
+                           units=units,
                            api_key=gmaps.gmap_key)
