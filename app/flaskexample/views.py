@@ -127,7 +127,8 @@ def output_page():
     cost_weights = get_weights(request.values)
 
     # run the optimizer
-    route_app = route_optimizer.RunRouteOptimizer(show=False)
+    route_app = route_optimizer.RunRouteOptimizer(num_points_per_segment=8,
+                                                  show=False)
     route_results = route_app.run(route_ends, run_length, units,
                                   cost_weights=cost_weights)
 

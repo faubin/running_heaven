@@ -1,3 +1,8 @@
+#!/usr/bin/env
+"""
+This class optimizes running routes based on tre density and parks given
+distance constraints
+"""
 from collections import defaultdict
 import copy
 import geopandas as gpd
@@ -24,19 +29,17 @@ except ImportError:
 
 
 class RunRouteOptimizer(core.HeavenCore):
-    """
-    """
-    def __init__(self, show=True, borough='M'):
-        """
-        """
+    def __init__(self, num_points_per_segment=2, show=True):
         core.HeavenCore.__init__(self)
         self.data_hand = data_handler.DataHandler()
+        self.num_points_per_segment = num_points_per_segment
         self.show = show
         return
 
     def int_prog(self, df, units, start_label, end_label, target_distance,
                  park):
         """
+        Optimizes the route using integer programming
         """
         costs = df['tree_density_weight'].values
         cost_intersections = np.zeros(len(costs))
@@ -329,13 +332,16 @@ class RunRouteOptimizer(core.HeavenCore):
         """
         """
         vertexes = []
+        geometries = []
         for i in range(len(path_indices)):
             name = '{0:s}_to_{1:s}'.format(df['vertex_start'].iloc[path_indices[i]],
                                            df['vertex_end'].iloc[path_indices[i]])
             vertexes.append(name)
+            geometries.append(df['geometry'].iloc[path_indices[i]])
             name = '{1:s}_to_{0:s}'.format(df['vertex_start'].iloc[path_indices[i]],
                                            df['vertex_end'].iloc[path_indices[i]])
             vertexes.append(name)
+            geometries.append(df['geometry'].iloc[path_indices[i]])
 
         node = start_point
         path = []
@@ -346,13 +352,26 @@ class RunRouteOptimizer(core.HeavenCore):
                 if vertexes[i].split('_to_')[0] == node:
                     path.append(vertexes[i].split('_to_')[0].split('_')[::-1])
                     node = vertexes[i].split('_to_')[1]
+
+                    # adds more resulution
+                    for n_pt in range(1, self.num_points_per_segment):
+                        n_pts = len(geometries[i].xy[0])
+                        index_ = int(n_pt * n_pts/ self.num_points_per_segment)
+                        path.append([geometries[i].xy[1][index_],
+                                     geometries[i].xy[0][index_]])
+
+                    # removes values when used
                     mod = i % 2
                     if i % 2 == 1:
                         vertexes.pop(i)
                         vertexes.pop(i-1)
+                        geometries.pop(i)
+                        geometries.pop(i-1)
                     else:
                         vertexes.pop(i+1)
                         vertexes.pop(i)
+                        geometries.pop(i+1)
+                        geometries.pop(i)
                     break
             if node == end_point:
                 done = True
@@ -425,8 +444,8 @@ class RunRouteOptimizer(core.HeavenCore):
                                'tree_density_weight': df_proc['tree_density_weight'].iloc[i],
                                'park_weight': df_proc['park_weight'].iloc[i],
                                'intersection': int(df_proc['type'].iloc[i] == 'street'),
-                               }
-                              ))
+                              }
+                             ))
 
             # try different cost term weights
             choices = [0.1, 10.]
