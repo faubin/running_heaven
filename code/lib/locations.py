@@ -37,7 +37,7 @@ def get_angle(longitude_1, latitude_1, longitude_2, latitude_2):
     return angle
 
 
-def select_random_point(segments, start_point, target_distance):
+def select_random_point(segments, start_point, target_distance, units):
     """
     Select a random point in segments withing a distance
 
@@ -71,7 +71,7 @@ def select_random_point(segments, start_point, target_distance):
     ang_dist_to_pt = angles.ang_dist(lon, lat,
                                      all_vertex_lon_lat['lon'],
                                      all_vertex_lon_lat['lat'])
-    dist_to_pt = angles.convert_distance_to_physical(ang_dist_to_pt, 'km')
+    dist_to_pt = angles.convert_distance_to_physical(ang_dist_to_pt, units)
     valid = np.logical_and(dist_to_pt > 0., dist_to_pt < target_distance)
 
     index = int(np.floor(np.random.rand(1) * valid.sum())[0])
