@@ -39,7 +39,6 @@ class RunRouteOptimizer(core.HeavenCore):
         self.show = show
         return
 
-
     def define_variables(self, map_components):
         """
         Defines pulp variable for the integer programming
@@ -54,14 +53,16 @@ class RunRouteOptimizer(core.HeavenCore):
         segment_in_route = []
         all_indices = range(len(map_components.index))
         for i in all_indices:
-            path_name = '{0:s}_to_{1:s}'.format(map_components['vertex_start'].iloc[i],
-                                                map_components['vertex_end'].iloc[i])
+            start_label = map_components['vertex_start'].iloc[i]
+            end_label = map_components['vertex_end'].iloc[i]
+            path_name = '{0:s}_to_{1:s}'.format(start_label, end_label)
             path_name = path_name.replace('-', 'm')
             segment_in_route.append(pulp.LpVariable(path_name, 0, 1,
                                                     pulp.LpInteger))
         for i in all_indices:
-            path_name = '{1:s}_to_{0:s}'.format(map_components['vertex_start'].iloc[i],
-                                                map_components['vertex_end'].iloc[i])
+            start_label = map_components['vertex_start'].iloc[i]
+            end_label = map_components['vertex_end'].iloc[i]
+            path_name = '{1:s}_to_{0:s}'.format(start_label, end_label)
             path_name = path_name.replace('-', 'm')
             segment_in_route.append(pulp.LpVariable(path_name, 0, 1,
                                                     pulp.LpInteger))
@@ -242,7 +243,8 @@ class RunRouteOptimizer(core.HeavenCore):
                 # less cost for routes towards parks
                 cost_park = (1. - r_factor)**2 * temp[2]['park_weight']**2
 
-                # cost_intersection = (1. - r_factor)**2 * temp[2]['intersection']**2
+                # cost_intersection = (1. - r_factor)**2 *
+                #                      temp[2]['intersection']**2
                 cost_intersection = temp[2]['intersection']**2
 
                 cost_terms = [weight[0]*cost_dist,
@@ -383,12 +385,12 @@ class RunRouteOptimizer(core.HeavenCore):
         vertexes = []
         geometries = []
         for path_index in path_indices:
-            name = '{0:s}_to_{1:s}'.format(segments['vertex_start'].iloc[path_index],
-                                           segments['vertex_end'].iloc[path_index])
+            route_ends = (segments['vertex_start'].iloc[path_index],
+                          segments['vertex_end'].iloc[path_index])
+            name = '{0:s}_to_{1:s}'.format(*route_ends)
             vertexes.append(name)
             geometries.append(segments['geometry'].iloc[path_index])
-            name = '{1:s}_to_{0:s}'.format(segments['vertex_start'].iloc[path_index],
-                                           segments['vertex_end'].iloc[path_index])
+            name = '{1:s}_to_{0:s}'.format(*route_ends)
             vertexes.append(name)
             geometries.append(segments['geometry'].iloc[path_index])
 
@@ -405,7 +407,7 @@ class RunRouteOptimizer(core.HeavenCore):
                     # adds more resulution
                     for n_pt in range(1, self.num_points_per_segment):
                         n_pts = len(geometries[vertex_index].xy[0])
-                        index_ = int(n_pt * n_pts/ self.num_points_per_segment)
+                        index_ = int(n_pt * n_pts/self.num_points_per_segment)
                         path.append([geometries[vertex_index].xy[1][index_],
                                      geometries[vertex_index].xy[0][index_]])
 
@@ -457,8 +459,9 @@ class RunRouteOptimizer(core.HeavenCore):
         processed_path = os.path.join(self.running_heaven_path, 'data',
                                       'processed')
         for key_ in ['park', 'street', 'sidewalk']:
+            geojson_file_name = '{0:s}.geojson'.format(key_)
             dfs[key_] = gpd.read_file(os.path.join(processed_path,
-                                                   '{0:s}.geojson'.format(key_)))
+                                                   geojson_file_name))
         dfs['tree'] = pd.read_csv(os.path.join(processed_path, 'tree.csv'))
 
         # updating dataframe
@@ -484,22 +487,27 @@ class RunRouteOptimizer(core.HeavenCore):
             edges = []
             segments_copy = copy.deepcopy(segments)
             vertex_start = copy.deepcopy(segments_copy['vertex_start'])
-            segments_copy['vertex_start'] = copy.deepcopy(segments_copy['vertex_end'])
-            segments_copy['vertex_end'] = copy.deepcopy(vertex_start)
+            vertex_end = copy.deepcopy(segments_copy['vertex_end'])
+            segments_copy['vertex_start'] = vertex_end
+            segments_copy['vertex_end'] = vertex_start
             segments = segments.append(segments_copy)
             segments.reset_index(drop=True, inplace=True)
 
             for index in segments.index.astype(int):
                 # distance - shortest path
-                edges.append((segments['vertex_start'].iloc[index],  # starting point
-                              segments['vertex_end'].iloc[index],  # end point
-                              0.,  # cost, updated automatically
-                              {'distance': segments['distance'].iloc[index],
-                               'tree_density_weight': segments['tree_density_weight'].iloc[index],
-                               'park_weight': segments['park_weight'].iloc[index],
-                               'intersection': int(segments['type'].iloc[index] == 'street'),
-                              }
-                             ))
+                tree_weight = segments['tree_density_weight'].iloc[index]
+                park_weight = segments['park_weight'].iloc[index]
+                intersection = int(segments['type'].iloc[index] == 'street')
+                segment_info = {'distance': segments['distance'].iloc[index],
+                                'tree_density_weight': tree_weight,
+                                'park_weight': park_weight,
+                                'intersection': intersection}
+
+                # (starting point, end point, cost, segment_info
+                edges.append((segments['vertex_start'].iloc[index],
+                              segments['vertex_end'].iloc[index],
+                              0.,
+                              segment_info))
 
             # try different cost term weights
             choices = [0.1, 10.]
