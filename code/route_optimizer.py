@@ -263,55 +263,66 @@ class RunRouteOptimizer(core.HeavenCore):
         start_label is the start point
         end_label is the final point
         """
-        g = defaultdict(list)
+        vertex_connect = defaultdict(list)
         for label1, label2, cost_segment, info in edges:
-            g[label1].append((cost_segment, label2, info))
+            vertex_connect[label1].append((cost_segment, label2, info))
 
-        q = [(0, start_label, (), 0)]
+        vertexes = [(0, start_label, (), 0)]
         seen = set()
         mins_cost = {start_label: 0}
         calc_dists = {start_label: 0}
-        g = self.update_costs(g, target_distance, calc_dists, start_label,
-                              final_label, weight)
+        vertex_connect = self.update_costs(vertex_connect,
+                                           target_distance,
+                                           calc_dists,
+                                           start_label,
+                                           final_label,
+                                           weight)
 
-        while q:
+        while vertexes:
             # get a new vertex to visit
-            temp = heapq.heappop(q)
-            (cost, v1, path, dist) = temp
+            (cost, label_at, path, dist) = heapq.heappop(vertexes)
 
             # do not revisit vertex
-            if v1 not in seen:
-                seen.add(v1)
-                path = (v1, path)
+            if label_at not in seen:
+                seen.add(label_at)
+                path = (label_at, path)
 
                 # if arrived to last vertex, done
-                if v1 == final_label:
+                if label_at == final_label:
                     return (cost, path, dist)
 
-                g = self.update_costs(g, target_distance, calc_dists, v1,
-                                      final_label, weight)
-                for c, v2, info_ in g.get(v1, ()):
+                vertex_connect = self.update_costs(vertex_connect,
+                                                   target_distance,
+                                                   calc_dists,
+                                                   label_at,
+                                                   final_label,
+                                                   weight)
+                for cost_, label_next, info_ in vertex_connect.get(label_at,
+                                                                   ()):
 
                     # do not repeat visited vertex
-                    if v2 in seen:
+                    if label_next in seen:
                         continue
 
-                    prev_cost = mins_cost.get(v2, None)
-                    new_cost = cost + c
+                    prev_cost = mins_cost.get(label_next, None)
+                    new_cost = cost + cost_
                     new_d = dist + info_['distance']
                     if prev_cost is None or new_cost < prev_cost:
-                        mins_cost[v2] = new_cost
-                        calc_dists[v2] = new_d
-                        heapq.heappush(q, (new_cost, v2, path, new_d))
+                        mins_cost[label_next] = new_cost
+                        calc_dists[label_next] = new_d
+                        heapq.heappush(vertexes, (new_cost,
+                                                  label_next,
+                                                  path,
+                                                  new_d))
 
         # return float("inf")
         return (cost, path, dist)
 
     # def define_park_weight(self, df1, df2, target_d):
-    def define_park_weight(self, df, target_d):
+    def define_park_weight(self, segments, target_d):
         """
         """
-        weight = (df['min_dist_to_park'] / target_d)**0.5  # **2
+        weight = (segments['min_dist_to_park'] / target_d)**0.5
         weight.loc[weight > 1.] = 1.
         return weight
 
@@ -334,15 +345,15 @@ class RunRouteOptimizer(core.HeavenCore):
         pl.close(1)
         return
 
-    def find_vertex_index(self, df, pt1, pt2):
+    def find_vertex_index(self, segments, pt1, pt2):
         """
         """
-        ind = df["vertex_start"] == pt1
-        ind &= df['vertex_end'] == pt2
+        ind = segments["vertex_start"] == pt1
+        ind &= segments['vertex_end'] == pt2
         ind = np.where(ind)[0]
         return ind
 
-    def get_indices_from_path(self, path, start_pt, df):
+    def get_indices_from_path(self, path, start_pt, segments):
         """
         """
         dist = path[2]
@@ -352,7 +363,7 @@ class RunRouteOptimizer(core.HeavenCore):
         while not path[0] == start_pt:
             # nothing to do for first vertex
             if prev_pt is not None:
-                ind = self.find_vertex_index(df, prev_pt, path[0])
+                ind = self.find_vertex_index(segments, prev_pt, path[0])
                 if len(ind) > 1:
                     print('problem with selecting path', ind)
                 path_indices.append(ind[0])
@@ -360,55 +371,55 @@ class RunRouteOptimizer(core.HeavenCore):
             # update values for next loop
             prev_pt = copy.deepcopy(path[0])
             path = path[1]
-        ind = self.find_vertex_index(df, prev_pt, path[0])
+        ind = self.find_vertex_index(segments, prev_pt, path[0])
         if len(ind) > 1:
             print('problem with selecting path', ind)
         path_indices.append(ind[0])
         return path_indices, dist
 
-    def get_route(self, df, path_indices, start_point, end_point):
+    def get_route(self, segments, path_indices, start_point, end_point):
         """
         """
         vertexes = []
         geometries = []
-        for i in range(len(path_indices)):
-            name = '{0:s}_to_{1:s}'.format(df['vertex_start'].iloc[path_indices[i]],
-                                           df['vertex_end'].iloc[path_indices[i]])
+        for path_index in path_indices:
+            name = '{0:s}_to_{1:s}'.format(segments['vertex_start'].iloc[path_index],
+                                           segments['vertex_end'].iloc[path_index])
             vertexes.append(name)
-            geometries.append(df['geometry'].iloc[path_indices[i]])
-            name = '{1:s}_to_{0:s}'.format(df['vertex_start'].iloc[path_indices[i]],
-                                           df['vertex_end'].iloc[path_indices[i]])
+            geometries.append(segments['geometry'].iloc[path_index])
+            name = '{1:s}_to_{0:s}'.format(segments['vertex_start'].iloc[path_index],
+                                           segments['vertex_end'].iloc[path_index])
             vertexes.append(name)
-            geometries.append(df['geometry'].iloc[path_indices[i]])
+            geometries.append(segments['geometry'].iloc[path_index])
 
         node = start_point
         path = []
         done = False
         while not done:
             prev_path_length = len(path)
-            for i in range(len(vertexes)):
-                if vertexes[i].split('_to_')[0] == node:
-                    path.append(vertexes[i].split('_to_')[0].split('_')[::-1])
-                    node = vertexes[i].split('_to_')[1]
+            for vertex_index, vertex in enumerate(vertexes):
+                if vertex.split('_to_')[0] == node:
+                    path.append(vertex.split('_to_')[0].split('_')[::-1])
+                    node = vertex.split('_to_')[1]
 
                     # adds more resulution
                     for n_pt in range(1, self.num_points_per_segment):
-                        n_pts = len(geometries[i].xy[0])
+                        n_pts = len(geometries[vertex_index].xy[0])
                         index_ = int(n_pt * n_pts/ self.num_points_per_segment)
-                        path.append([geometries[i].xy[1][index_],
-                                     geometries[i].xy[0][index_]])
+                        path.append([geometries[vertex_index].xy[1][index_],
+                                     geometries[vertex_index].xy[0][index_]])
 
                     # removes values when used
-                    if i % 2 == 1:
-                        vertexes.pop(i)
-                        vertexes.pop(i-1)
-                        geometries.pop(i)
-                        geometries.pop(i-1)
+                    if vertex_index % 2 == 1:
+                        vertexes.pop(vertex_index)
+                        vertexes.pop(vertex_index-1)
+                        geometries.pop(vertex_index)
+                        geometries.pop(vertex_index-1)
                     else:
-                        vertexes.pop(i+1)
-                        vertexes.pop(i)
-                        geometries.pop(i+1)
-                        geometries.pop(i)
+                        vertexes.pop(vertex_index+1)
+                        vertexes.pop(vertex_index)
+                        geometries.pop(vertex_index+1)
+                        geometries.pop(vertex_index)
                     break
             if node == end_point:
                 done = True
@@ -421,11 +432,11 @@ class RunRouteOptimizer(core.HeavenCore):
             algorithm_type='dijkstra', cost_weights=None):
         """
         """
-        df_proc = self.data_hand.load_processed_data()
+        segments = self.data_hand.load_processed_data()
 
         # list of all possible intersections
-        intersection_names = list(df_proc['vertex_start'].values)
-        intersection_names += list(df_proc['vertex_end'].values)
+        intersection_names = list(segments['vertex_start'].values)
+        intersection_names += list(segments['vertex_end'].values)
         intersection_names = list(set(intersection_names))
 
         # get closest intersection to provided points
@@ -451,39 +462,42 @@ class RunRouteOptimizer(core.HeavenCore):
         dfs['tree'] = pd.read_csv(os.path.join(processed_path, 'tree.csv'))
 
         # updating dataframe
-        df_proc['tree_density_weight'] = 1. - df_proc['tree_density']
+        segments['tree_density_weight'] = 1. - segments['tree_density']
         target_dist_deg = angles.convert_distance_to_degree(target_dist, units)
-        park_weight = self.define_park_weight(df_proc,  # dfs['park'],
+        park_weight = self.define_park_weight(segments,  # dfs['park'],
                                               target_dist_deg)
-        df_proc['park_weight'] = park_weight
+        segments['park_weight'] = park_weight
 
         # distribution of features for debugging
         # self.feature_distributions(tree_density_norm, park_weight)
 
         # linear programming solution
         if algorithm_type == 'integer_programming':
-            path_indices, d_path = self.integer_programming(df_proc,
+            path_indices, d_path = self.integer_programming(segments,
                                                             units,
                                                             (start_point,
                                                              end_point),
                                                             target_dist)
         elif algorithm_type == 'dijkstra':
             # problem information for Dijkstra's algorithm
+            # add the segments in the reverse direction as well
             edges = []
-            new_df3 = copy.deepcopy(df_proc)
-            st = copy.deepcopy(new_df3['vertex_start'])
-            new_df3['vertex_start'] = copy.deepcopy(new_df3['vertex_end'])
-            new_df3['vertex_end'] = copy.deepcopy(st)
-            df_proc = df_proc.append(new_df3)
-            for i in range(len(df_proc.index)):
+            segments_copy = copy.deepcopy(segments)
+            vertex_start = copy.deepcopy(segments_copy['vertex_start'])
+            segments_copy['vertex_start'] = copy.deepcopy(segments_copy['vertex_end'])
+            segments_copy['vertex_end'] = copy.deepcopy(vertex_start)
+            segments = segments.append(segments_copy)
+            segments.reset_index(drop=True, inplace=True)
+
+            for index in segments.index.astype(int):
                 # distance - shortest path
-                edges.append((df_proc['vertex_start'].iloc[i],  # starting point
-                              df_proc['vertex_end'].iloc[i],  # end point
+                edges.append((segments['vertex_start'].iloc[index],  # starting point
+                              segments['vertex_end'].iloc[index],  # end point
                               0.,  # cost, updated automatically
-                              {'distance': df_proc['distance'].iloc[i],
-                               'tree_density_weight': df_proc['tree_density_weight'].iloc[i],
-                               'park_weight': df_proc['park_weight'].iloc[i],
-                               'intersection': int(df_proc['type'].iloc[i] == 'street'),
+                              {'distance': segments['distance'].iloc[index],
+                               'tree_density_weight': segments['tree_density_weight'].iloc[index],
+                               'park_weight': segments['park_weight'].iloc[index],
+                               'intersection': int(segments['type'].iloc[index] == 'street'),
                               }
                              ))
 
@@ -519,7 +533,7 @@ class RunRouteOptimizer(core.HeavenCore):
                 # get indices from path
                 path_indices, d_path = self.get_indices_from_path(opt_path,
                                                                   start_point,
-                                                                  df_proc)
+                                                                  segments)
                 d_path = angles.convert_distance_to_physical(d_path, units)
                 path_indices_list.append(path_indices)
                 d_path_list.append(d_path)
@@ -535,7 +549,7 @@ class RunRouteOptimizer(core.HeavenCore):
 
         # plotting the data and route
         if self.show:
-            map_plotter.plot_route(dfs, route_ends, df_proc, path_indices)
+            map_plotter.plot_route(dfs, route_ends, segments, path_indices)
 
         # resulting distance
         print('Total distance is : {0:f} {1:s}'.format(d_path, units))
@@ -544,10 +558,10 @@ class RunRouteOptimizer(core.HeavenCore):
         if self.show:
             pl.show()
 
-        route_lon_lat = self.get_route(df_proc, path_indices, start_point,
+        route_lon_lat = self.get_route(segments, path_indices, start_point,
                                        end_point)
 
-        return d_path, route_lon_lat, df_proc.iloc[path_indices]
+        return d_path, route_lon_lat, segments.iloc[path_indices]
 
 if __name__ == "__main__":
     # ROUTE_ENDS = ('-73.967_40.763', '-73.963_40.772')  # SE NE of CP
@@ -581,8 +595,8 @@ if __name__ == "__main__":
     UNITS = 'km'
     # UNITS = 'miles'
 
-    # ALGORITHM_TYPE = 'dijkstra'
-    ALGORITHM_TYPE = 'integer_programming'
+    ALGORITHM_TYPE = 'dijkstra'
+    # ALGORITHM_TYPE = 'integer_programming'
 
     APP = RunRouteOptimizer()
     APP.run(ROUTE_ENDS, TARGET_DISTANCE, UNITS, ALGORITHM_TYPE,
