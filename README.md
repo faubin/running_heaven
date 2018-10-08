@@ -12,7 +12,9 @@ I implemented a modified Dijkstra's algorithm to optimize running routes bases o
 
 The web-app lives at http://runningheaven.space/
 
-Below is an example of a 5 km route. Parks (yellow), streets (red), pedestrian roads (blue), and trees (green) are shown with the optimized running route (black) from the starting point (quare magenta) to the end point (circle magents)
+The code currently only supports Manhattan. It will soon support NYC.
+
+Below is an example of a 5 km route through Central Park. Parks (yellow), streets (red), pedestrian roads (blue), and trees (green) are shown with the optimized running route (black) from the starting point (quare magenta) to the end point (circle magents)
 
 <p align='center'>
 <img src='figures/example_route.png' width='650'>
@@ -25,6 +27,7 @@ Below is an example of a 5 km route. Parks (yellow), streets (red), pedestrian r
   * Run route_optimization.py to optimize routes. The arguments are hardcoded for now, but it will be possible to enter them from the command line soon.
 
 # Packages to install
+  * python 3 (tested with python 3.6.5)
   * numpy
   * scipy
   * pandas
