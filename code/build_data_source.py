@@ -1,42 +1,45 @@
+#!/usr/bin/env
+"""
+This class processes the raw data for route_optimizer.py
+"""
 #! /usr/bin/env python
 import ast
-import geopandas as gpd
-import names
 import os
-import pandas as pd
 import pdb
-import pylab as pl
-import requests
-import running_heaven
-from shapely import geometry
 import time
-from running_heaven.code import angles
-from running_heaven.code import data_handler
+import requests
+import pylab as pl
+import geopandas as gpd
+import pandas as pd
+from shapely import geometry
+from running_heaven.code.lib import angles
+from running_heaven.code.lib import core
+##  from running_heaven.code.lib import data_handler
+from running_heaven.code.lib import names
+from running_heaven.code.lib import map_plotter
 
 
-class DataBuilder():
+class DataBuilder(core.HeavenCore):
     """
+    This class processes the raw data for route_optimizer.py
     """
     def __init__(self, borough='M'):
-        """
-        """
+        core.HeavenCore.__init__(self)
         self.boroughs = {'M': '1',  # Manhattan
-                         '?': '2',  # Bronx
-                         '?': '3',  # Brooklyn
-                         '?': '4',  # Queens
-                         '?': '5'}  # Staten Island
+                         'X': '2',  # Bronx
+                         'B': '3',  # Brooklyn
+                         'Q': '4',  # Queens
+                         'R': '5'}  # Staten Island
         self.borough_names = {'M': 'Manhattan',
-                              '?': 'Bronx',
-                              '?': 'Brooklyn',
-                              '?': 'Queens',
-                              '?': 'Staten Island'}
+                              'X': 'Bronx',
+                              'B': 'Brooklyn',
+                              'Q': 'Queens',
+                              'R': 'Staten Island'}
         self.borough_name = self.borough_names[borough]
         self.borough_code = self.boroughs[borough]
         self.borough = borough
-        # missing boroughs are: {'B', 'Q', 'R', 'X'}
 
         # data structure
-        self.running_heaven_path = running_heaven.__path__[0]
         if 'data' not in os.listdir(self.running_heaven_path):
             os.mkdir(os.path.join(self.running_heaven_path, 'data'))
         return
@@ -47,8 +50,7 @@ class DataBuilder():
         path = os.path.join(self.running_heaven_path, 'raw_data/')
         data_file_names = {'park': 'Parks Zones.geojson',
                            'sidewalk': 'Sidewalk Centerline.geojson',
-                           'street': 'NYC Street Centerline (CSCL).geojson',
-                           }
+                           'street': 'NYC Street Centerline (CSCL).geojson'}
         raw_dfs = {}
         for key_ in data_file_names.keys():
             print('Loading {0:s} data'.format(key_))
@@ -79,8 +81,8 @@ class DataBuilder():
             request += '?boroname={0:s}'.format(self.borough_name)
             request += '&$limit={0:d}'.format(query_limit)
             request += '&$offset={0:d}'.format(i*query_limit)
-            r = requests.get(request)
-            text = r.text[:-1]
+            request_value = requests.get(request)
+            text = request_value.text[:-1]
 
             # convert string to list of dictionary safely
             try:
@@ -96,37 +98,36 @@ class DataBuilder():
             time.sleep(5)
 
         # convert to DataFrame
-        df = pd.DataFrame(tree_list)
+        tree_component = pd.DataFrame(tree_list)
 
         # write data to file
         str_to_float_list = ['longitude', 'latitude']
-        df[str_to_float_list] = df[str_to_float_list].astype(float)
-        return df
+        tree_component[str_to_float_list] = tree_component[str_to_float_list].astype(float)
+        return tree_component
 
-    def get_tree_density(self, geom, df):
+    def get_tree_density(self, geom, tree_component):
         """
         """
         x0 = geom.representative_point().x
         y0 = geom.representative_point().y
-        x1 = geom.boundary[0].x
-        y1 = geom.boundary[0].y
-        x2 = geom.boundary[1].x
-        y2 = geom.boundary[1].y
+        # x1 = geom.boundary[0].x
+        # y1 = geom.boundary[0].y
+        # x2 = geom.boundary[1].x
+        # y2 = geom.boundary[1].y
         # r2 = ((x2-x1)**2 + (y2-y1)**2) / 4.
         r2 = 0.0008212487130291317**2
-        # print(((x2-x1)**2 + (y2-y1)**2) / 4. )
 
-        inside = (df['longitude'] - x0)**2 + (df['latitude']-y0)**2 <= r2
+        inside = (tree_component['longitude'] - x0)**2 + (tree_component['latitude']-y0)**2 <= r2
         return inside.sum()
 
-    def select_data_for_borough(self, dfs):
+    def select_data_for_borough(self, map_components):
         """
         only keepds the data in a borough for streets and parks
         for sidewalks, there is no borough information in the data
         so the sidewalks within some (lon, lat) are kept -> not ideal...
         """
-        dfs['park'] = dfs['park'].loc[dfs['park']['borough'] == self.borough]
-        dfs['street'] = dfs['street'].loc[dfs['street']['borocode'] == self.borough_code]
+        map_components['park'] = map_components['park'].loc[map_components['park']['borough'] == self.borough]
+        map_components['street'] = map_components['street'].loc[map_components['street']['borocode'] == self.borough_code]
 
         # load borough boundary
         boundary_file_name = os.path.join(self.running_heaven_path, 'raw_data',
@@ -137,31 +138,34 @@ class DataBuilder():
 
         # identify the sidewalks outside of the borough
         index_to_reject = []
-        for i in dfs['sidewalk'].index:
-            lon_deg = angles.rad_to_deg(dfs['sidewalk']['rep_x_rad'].iloc[i])
-            lat_deg = angles.rad_to_deg(dfs['sidewalk']['rep_y_rad'].iloc[i])
+        for i in map_components['sidewalk'].index:
+            lon_deg = angles.rad_to_deg(map_components['sidewalk']['rep_x_rad'].iloc[i])
+            lat_deg = angles.rad_to_deg(map_components['sidewalk']['rep_y_rad'].iloc[i])
             point = geometry.Point(lon_deg, lat_deg)
             if not borough_geometry.contains(point):
                 index_to_reject.append(i)
 
-        dfs['sidewalk'].drop(index_to_reject, inplace=True)
-        dfs['sidewalk'].reset_index(drop=True, inplace=True)
+        map_components['sidewalk'].drop(index_to_reject, inplace=True)
+        map_components['sidewalk'].reset_index(drop=True, inplace=True)
 
-        return dfs
+        return map_components
 
-    def add_geometry_representative(self, dfs):
+    def add_geometry_representative(self, map_components):
         """
         adds columns to geometry DataFrames with a representative point in rad
         """
-        for segment_type, df in dfs.items():
+        for segment_type, map_component in map_components.items():
             if not segment_type == 'tree':
-                rep_x_rad = [angles.deg_to_rad(df['geometry'].iloc[i].representative_point().x) for i in range(len(df.index))]
-                df['rep_x_rad'] = pd.Series(rep_x_rad, index=df.index)
-                rep_y_rad = [angles.deg_to_rad(df['geometry'].iloc[i].representative_point().y) for i in range(len(df.index))]
-                df['rep_y_rad'] = pd.Series(rep_y_rad, index=df.index)
-        return dfs
+                rep_x_rad = [angles.deg_to_rad(map_component['geometry'].iloc[i].representative_point().x) for i in range(len(map_component.index))]
+                map_component['rep_x_rad'] = pd.Series(rep_x_rad,
+                                                       index=map_component.index)
+                rep_y_rad = [angles.deg_to_rad(map_component['geometry'].iloc[i].representative_point().y) for i in range(len(map_component.index))]
+                map_component['rep_y_rad'] = pd.Series(rep_y_rad,
+                                                       index=map_component.index)
+        return map_components
 
-    def select_data(self, df, lon0_deg, lat0_deg, r_deg, exclude_data):
+    def select_data(self, map_component, lon0_deg, lat0_deg, r_deg,
+                    exclude_data):
         """
         drops the data outside a radius r_deg around (lon0_deg, lat0_deg)
         """
@@ -170,15 +174,21 @@ class DataBuilder():
         lat0 = angles.deg_to_rad(pl.float64(lat0_deg))  # phi
 
         # rounding could be an issue...
-        df['diff_to_ref_rad'] = angles.ang_dist(lon0, lat0, df['rep_x_rad'],
-                                                df['rep_y_rad'])
+        rep_x_rad = map_component['rep_x_rad']
+        rep_y_rad = map_component['rep_y_rad']
+        map_component['diff_to_ref_rad'] = angles.ang_dist(lon0,
+                                                           lat0,
+                                                           rep_x_rad,
+                                                           rep_y_rad)
 
         if exclude_data:
-            invalid = angles.rad_to_deg(df['diff_to_ref_rad']) > r_deg
-            df.drop(df.index[invalid], inplace=True)
-        return df
+            diff_to_ref_rad = map_component['diff_to_ref_rad']
+            invalid = angles.rad_to_deg(diff_to_ref_rad) > r_deg
+            map_component.drop(map_component.index[invalid], inplace=True)
+        return map_component
 
-    def select_data_pts(self, df, lon0_deg, lat0_deg, r_deg, exclude_data):
+    def select_data_pts(self, map_component, lon0_deg, lat0_deg, r_deg,
+                        exclude_data):
         """
         drops the data outside a radius r_deg around (lon0_deg, lat0_deg)
         """
@@ -186,36 +196,38 @@ class DataBuilder():
         lat0 = angles.deg_to_rad(pl.float64(lat0_deg))  # phi
 
         # rounding could be an issue...
-        df['diff_to_ref_rad'] = angles.ang_dist(lon0, lat0,
-                                                angles.deg_to_rad(df['longitude']),
-                                                angles.deg_to_rad(df['latitude']))
+        longitude_rad = angles.deg_to_rad(map_component['longitude'])
+        latitude_rad = angles.deg_to_rad(map_component['latitude'])
+        map_component['diff_to_ref_rad'] = angles.ang_dist(lon0,
+                                                           lat0,
+                                                           longitude_rad,
+                                                           latitude_rad)
 
         if exclude_data:
-            invalid = angles.rad_to_deg(df['diff_to_ref_rad']) > r_deg
-            df.drop(df.index[invalid], inplace=True)
-        return df
+            diff_to_ref_rad = map_component['diff_to_ref_rad']
+            invalid = angles.rad_to_deg(diff_to_ref_rad) > r_deg
+            map_component.drop(map_component.index[invalid], inplace=True)
+        return map_component
 
-    def zoom_on_data(self, dfs, lon0_deg, lat0_deg, r_deg, exclude_data):
+    def zoom_on_data(self, map_components, lon0_deg, lat0_deg, r_deg, exclude_data):
         """
         """
-        for key_ in dfs.keys():
+        for key_ in map_components.keys():
             if key_ == 'tree':
-                dfs[key_] = self.select_data_pts(dfs[key_], lon0_deg, lat0_deg,
-                                                 r_deg, exclude_data)
+                map_components[key_] = self.select_data_pts(map_components[key_], lon0_deg, lat0_deg, r_deg, exclude_data)
             else:
-                dfs[key_] = self.select_data(dfs[key_], lon0_deg, lat0_deg,
-                                             r_deg, exclude_data)
-        return dfs
+                map_components[key_] = self.select_data(map_components[key_], lon0_deg, lat0_deg, r_deg, exclude_data)
+        return map_components
 
-    def plot_data(self, dfs):
+    def plot_data(self, map_components):
         """
         """
         # plotting the selected data
-        fig, ax1 = pl.subplots(figsize=(12, 12))
+        ax1 = pl.subplots(figsize=(12, 12))[1]
         colors = {'park': 'y', 'street': 'r', 'sidewalk': 'b'}
-        for n_key, key_ in enumerate(colors.keys()):
-            dfs[key_].plot(ax=ax1, color=colors[key_])
-        pl.plot(dfs['tree']['longitude'], dfs['tree']['latitude'],
+        for key_ in colors.keys():
+            map_components[key_].plot(ax=ax1, color=colors[key_])
+        pl.plot(map_components['tree']['longitude'], map_components['tree']['latitude'],
                 '.g', markersize=2)
 
         pl.xlabel('Longitude ($^o$)', fontsize=20)
@@ -227,7 +239,7 @@ class DataBuilder():
         pl.show()
         return
 
-    def extract_segments_from_df(self, dfs):
+    def extract_segments_from_df(self, map_components):
         """
         """
         # extract the important information from the segments
@@ -235,13 +247,11 @@ class DataBuilder():
                        'lat_end': [], 'distance': [], 'type': [],
                        'connections_start': [], 'connections_end': [],
                        'name_start': [], 'name_end': [],
-                       'geometry': [], 'tree_number': [],
-                       # 'park_weight': [],
-                       }
+                       'geometry': [], 'tree_number': []}
         print('Warning: radius for tree is hardcoded in get_tree_density().')
         for key_ in ['sidewalk', 'street']:
-            for i in range(len(dfs[key_].index)):
-                geom = dfs[key_]['geometry'].iloc[i]
+            for i in range(len(map_components[key_].index)):
+                geom = map_components[key_]['geometry'].iloc[i]
                 try:
                     data_for_df['lon_start'].append(geom.boundary[0].x)
                 except IndexError:
@@ -254,11 +264,14 @@ class DataBuilder():
                 data_for_df['type'].append(key_)
                 data_for_df['connections_start'].append([])
                 data_for_df['connections_end'].append([])
-                data_for_df['name_start'].append(names.lon_lat_to_name(data_for_df['lon_start'][-1],
-                                                 data_for_df['lat_start'][-1]))
-                data_for_df['name_end'].append(names.lon_lat_to_name(data_for_df['lon_end'][-1], data_for_df['lat_end'][-1]))
+                start_label = names.lon_lat_to_name(data_for_df['lon_start'][-1], data_for_df['lat_start'][-1])
+                data_for_df['name_start'].append(start_label)
+                end_label = names.lon_lat_to_name(data_for_df['lon_end'][-1],
+                                                  data_for_df['lat_end'][-1])
+                data_for_df['name_end'].append(end_label)
                 data_for_df['geometry'].append(geom)
-                data_for_df['tree_number'].append(self.get_tree_density(geom, dfs['tree']))
+                tree_number = self.get_tree_density(geom, map_components['tree'])
+                data_for_df['tree_number'].append(tree_number)
 
         for i in range(len(data_for_df['lon_start'])):
             for j in range(i+1, len(data_for_df['lon_start'])):
@@ -327,39 +340,39 @@ class DataBuilder():
         # === write function to add tree numbers
         return vertices
 
-    def write_data_to_file(self, data_dict):
+    def write_data_to_file(self, connections_dict):
         """
         """
         columns = ['vertex_start', 'vertex_end', 'distance', 'type',
                    'geometry', 'tree_number', 'tree_density',
                    'min_dist_to_park']
-        df = pd.DataFrame(data_dict, columns=columns)
-        df = gpd.GeoDataFrame(df)
-        df.to_file(os.path.join(self.running_heaven_path, 'data', 'processed',
-                                'route_connections.geojson'))
-        return
+        connections_pd = pd.DataFrame(connections_dict, columns=columns)
+        connections_gpd = gpd.GeoDataFrame(connections_pd)
+        connections_gpd.to_file(os.path.join(self.running_heaven_path,
+                                             'data',
+                                             'processed',
+                                             'route_connections.geojson'))
 
-    def write_processed_data_to_file(self, dfs):
+    def write_processed_data_to_file(self, map_components):
         """
         write data to file for plotting when optimizing routes
         """
-        if 'processed' not in os.listdir(os.path.join(self.running_heaven_path,
-                                                      'data')):
+        if 'processed' not in os.listdir(os.path.join(self.running_heaven_path, 'data')):
             os.mkdir(os.path.join(self.running_heaven_path, 'data',
                                   'processed'))
-        for key_ in dfs.keys():
+        for key_ in map_components.keys():
             if key_ == 'tree':
                 file_name = os.path.join(self.running_heaven_path, 'data',
                                          'processed', '{0:s}.csv'.format(key_))
-                dfs[key_].to_csv(file_name)
+                map_components[key_].to_csv(file_name)
             else:
                 file_name = os.path.join(self.running_heaven_path, 'data',
                                          'processed',
                                          '{0:s}.geojson'.format(key_))
-                dfs[key_].to_file(file_name)
+                map_components[key_].to_file(file_name)
         return
 
-    def add_weights(self, dict_, dfs):
+    def add_weights(self, dict_, map_components):
         """
         """
         is_sidewalk = pl.array(dict_['type']) == 'sidewalk'
@@ -370,7 +383,7 @@ class DataBuilder():
         dict_['tree_density'] /= pl.array(dict_['distance'])
 
         # sidewalks wet to maximum
-        max_density = max(dict_['tree_density'])
+        # max_density = max(dict_['tree_density'])
         # dict_['tree_density'][is_sidewalk] = max_density
 
         # dict_['tree_density'] /= max(dict_['tree_density'])
@@ -397,8 +410,8 @@ class DataBuilder():
 
             # distance park - segment
             dist = angles.ang_dist(lon, lat,
-                                   angles.rad_to_deg(dfs['park']['rep_x_rad']),
-                                   angles.rad_to_deg(dfs['park']['rep_y_rad']))
+                                   angles.rad_to_deg(map_components['park']['rep_x_rad']),
+                                   angles.rad_to_deg(map_components['park']['rep_y_rad']))
             dist = min(dist)
             dict_['min_dist_to_park'].append(dist)
         return dict_
@@ -411,8 +424,8 @@ class DataBuilder():
         map_components = self.add_geometry_representative(raw_map_components)
         data_dfs = self.select_data_for_borough(map_components)
 
-        data_hand = data_handler.DataHandler()
-        data_hand.plot_raw_data(data_dfs)
+        # data_hand = data_handler.DataHandler()
+        map_plotter.plot_raw_data(data_dfs)
 
         # include only data around central park for debugging
         # data_dfs = self.zoom_on_data(data_dfs, -73.97, 40.77, 0.01, False)
@@ -439,9 +452,9 @@ class DataBuilder():
         print('Getting connections from segments')
         conn_dict = self.convert_segments_to_vertex(data_dict)
         print('Adding weights')
-        conn_dict = self.add_weights(conn_dict, data_dfs)
+        connections_dict = self.add_weights(conn_dict, data_dfs)
         print('writing connections to file')
-        self.write_data_to_file(conn_dict)
+        self.write_data_to_file(connections_dict)
 
         # checking for duplicates
         for i in range(len(conn_dict['vertex_start'])):
@@ -457,5 +470,5 @@ class DataBuilder():
 
 
 if __name__ == "__main__":
-    app = DataBuilder()
-    app.run()
+    APP = DataBuilder()
+    APP.run()
