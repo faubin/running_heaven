@@ -5,13 +5,12 @@ distance constraints
 """
 from collections import defaultdict
 import copy
-import geopandas as gpd
-import numpy as np
 import heapq
 import itertools
 import os
+import geopandas as gpd
+import numpy as np
 import pandas as pd
-import pdb
 from running_heaven.code.lib import angles
 from running_heaven.code.lib import core
 from running_heaven.code.lib import data_handler
@@ -29,6 +28,10 @@ except ImportError:
 
 
 class RunRouteOptimizer(core.HeavenCore):
+    """
+    This class optimizes running routes based on tre density and parks given
+    distance constraints
+    """
     def __init__(self, num_points_per_segment=2, show=True):
         core.HeavenCore.__init__(self)
         self.data_hand = data_handler.DataHandler()
@@ -36,74 +39,113 @@ class RunRouteOptimizer(core.HeavenCore):
         self.show = show
         return
 
-    def int_prog(self, df, units, start_label, end_label, target_distance,
-                 park):
+
+    def define_variables(self, map_components):
+        """
+        Defines pulp variable for the integer programming
+
+        Input:
+            map_components is a pd.DataFrame of the raw data
+        Outputs:
+            segment_in_route is a list of pulp.LpVariable, 1 in route, 0 not
+                in route
+            segment_names is a list of the names of the variables
+        """
+        segment_in_route = []
+        all_indices = range(len(map_components.index))
+        for i in all_indices:
+            path_name = '{0:s}_to_{1:s}'.format(map_components['vertex_start'].iloc[i],
+                                                map_components['vertex_end'].iloc[i])
+            path_name = path_name.replace('-', 'm')
+            segment_in_route.append(pulp.LpVariable(path_name, 0, 1,
+                                                    pulp.LpInteger))
+        for i in all_indices:
+            path_name = '{1:s}_to_{0:s}'.format(map_components['vertex_start'].iloc[i],
+                                                map_components['vertex_end'].iloc[i])
+            path_name = path_name.replace('-', 'm')
+            segment_in_route.append(pulp.LpVariable(path_name, 0, 1,
+                                                    pulp.LpInteger))
+        return segment_in_route
+
+    def integer_programming(self, map_components, units, route_end_labels,
+                            target_distance):
         """
         Optimizes the route using integer programming
+
+        Inputs:
+            map_components is the raw data, a pd.DataFrame
+            units is either 'km' or 'miles'
+            route_end_labels is a tuple of the start and end labels
+                'longitude_latitude'
+            start_label is the 'longitude_latitude' label of the start point
+            end_label is the 'longitude_latitude' label of the end point
+            tartget distance is a float representing the target distance
+
+        Outputs:
+            segment_index, is a list of the indexes of map_components that are
+                part of the route
+            route_length is a float representing the total distance of the
+                route in units
         """
-        costs = df['tree_density_weight'].values
-        cost_intersections = np.zeros(len(costs))
-        cost_intersections[df['type'].values == 'street'] = 1.
-        costs += cost_intersections
+        # add the tree and intersection cost
+        cost_trees = map_components['tree_density_weight'].values
+        cost_intersections = np.zeros(len(cost_trees))
+        cost_intersections[map_components['type'].values == 'street'] = 1.
+        costs = cost_trees + cost_intersections
+        # add costs at the end of itself
         costs = np.append(costs, costs)
-        distances = angles.convert_distance_to_physical(df['distance'].values,
-                                                        units)
+
+        # physical distances
+        distance_deg = map_components['distance'].values
+        distances = angles.convert_distance_to_physical(distance_deg, units)
+        # add costs at the end of itself
         distances = np.append(distances, distances)
 
-        # x is 1 for a selected path, 0 otherwise, need to define both ways
-        names = []
-        x = []
-        all_indices = range(len(df.index))
-        for i in all_indices:
-            path_name = '{0:s}_to_{1:s}'.format(df['vertex_start'].iloc[i],
-                                                df['vertex_end'].iloc[i])
-            path_name = path_name.replace('-', 'm')
-            names.append(path_name)
-            x.append(pulp.LpVariable(path_name, 0, 1, pulp.LpInteger))
-        for i in all_indices:
-            path_name = '{1:s}_to_{0:s}'.format(df['vertex_start'].iloc[i],
-                                                df['vertex_end'].iloc[i])
-            path_name = path_name.replace('-', 'm')
-            names.append(path_name)
-            x.append(pulp.LpVariable(path_name, 0, 1, pulp.LpInteger))
+        # segment_in_route, is 1 for a selected path, 0 otherwise, need to
+        # define both ways
+        segment_in_route = self.define_variables(map_components)
 
         # Create the 'prob' variable to contain the problem data
         prob = pulp.LpProblem("Minimizing cost", pulp.LpMinimize)
 
         # The objective function is to minimize the cost function
-        prob += (costs * x).sum(), "Total cost"
+        prob += (costs * segment_in_route).sum(), "Total cost"
 
         # closed loop constraint
-        df.index = df.index.astype(int)
-        all_vertex = set(list(df['vertex_start']) + list(df['vertex_end']))
+        map_components.index = map_components.index.astype(int)
+        all_vertex = set(list(map_components['vertex_start']) +
+                         list(map_components['vertex_end']))
+        vertex_starts = map_components['vertex_start'].values
+        vertex_ends = map_components['vertex_end'].values
         for node in all_vertex:
             constraint = 0
-            for i in df.index[(df['vertex_start'] == node)]:
-                constraint += x[i]
-            for i in df.index[(df['vertex_start'] == node)]:
-                constraint -= x[i+len(df.index)]
-            for i in df.index[(df['vertex_end'] == node)]:
-                constraint -= x[i]
-            for i in df.index[(df['vertex_end'] == node)]:
-                constraint += x[i+len(df.index)]
+            for i in map_components.index[(vertex_starts == node)]:
+                constraint += segment_in_route[i]
+            for i in map_components.index[(vertex_starts == node)]:
+                constraint -= segment_in_route[i+len(map_components.index)]
+            for i in map_components.index[(vertex_ends == node)]:
+                constraint -= segment_in_route[i]
+            for i in map_components.index[(vertex_ends == node)]:
+                constraint += segment_in_route[i+len(map_components.index)]
 
-            if node == start_label:
+            if node == route_end_labels[0]:
                 prob += constraint == 1, 'Node {0:s}'.format(node)
-            elif node == end_label:
+            elif node == route_end_labels[1]:
                 prob += constraint == -1, 'Node {0:s}'.format(node)
             else:
                 prob += constraint == 0, 'Node {0:s}'.format(node)
 
         # can only go one way
-        len_ = int(len(df.index))
+        len_ = int(len(map_components.index))
         for i in range(0, len_):
-            prob += x[i] + x[i+len_] <= 1, "one_way" + str(i)
+            prob += segment_in_route[i] + segment_in_route[i+len_] <= 1,\
+                    "one_way" + str(i)
 
         # constraint on distance
-        # prob += (x * distances).sum() >= 0.9 * target_distance, 'distance1'
-        # prob += (x * distances).sum() <= 1.1 * target_distance, 'distance2'
-        prob += (x * distances).sum() >= target_distance-0.2, 'distance1'
-        prob += (x * distances).sum() <= target_distance+0.2, 'distance2'
+        prob += (segment_in_route * distances).sum() >= target_distance-0.2,\
+                'distance1'
+        prob += (segment_in_route * distances).sum() <= target_distance+0.2,\
+                'distance2'
 
         # The problem is solved using PuLP's choice of Solver
         prob.solve()
@@ -112,30 +154,33 @@ class RunRouteOptimizer(core.HeavenCore):
         print("Status:", pulp.LpStatus[prob.status])
 
         # Each of the variables is printed with it's resolved optimum value
-        n = 0
-        inde = []
-        vert = []
-        for v in prob.variables():
-            n += 1
-            if v.varValue == 1.:
-                print(v.name, "=", v.varValue)
-                vert.append(v.name)
-                vert_names = vert[-1].split('_to_')
-                for i in range(len(vert_names)):
-                    vert_names[i] = vert_names[i].replace('m', '-')
+        segment_index = []
+        for variable in prob.variables():
+            if variable.varValue == 1.:
+                vertex_name = variable.name.split('_to_')
+                vertex_lon = vertex_name[0].replace('m', '-')
+                vertex_lat = vertex_name[1].replace('m', '-')
 
-                xxx = np.where(np.logical_and(df['vertex_start'].values == vert_names[0], df['vertex_end'].values == vert_names[1]))[0]
-                if len(xxx) == 1:
-                    inde.append(xxx[0])
-                xxx = np.where(np.logical_and(df['vertex_end'].values == vert_names[0], df['vertex_start'].values == vert_names[1]))[0]
-                if len(xxx) == 1:
-                    inde.append(xxx[0])
+                # normal order
+                segment_valid = np.logical_and(vertex_starts == vertex_lon,
+                                               vertex_ends == vertex_lat)
+                index_selected = np.where(segment_valid)[0]
+                if len(index_selected) == 1:
+                    segment_index.append(index_selected[0])
+                # reverse order
+                segment_valid = np.logical_and(vertex_ends == vertex_lon,
+                                               vertex_starts == vertex_lat)
+                index_selected = np.where(segment_valid)[0]
+                if len(index_selected) == 1:
+                    segment_index.append(index_selected[0])
 
         # The optimised objective function value is printed to the screen
-        print("Total Cost = ", pulp.value(prob.objective))
+        # print("Total Cost = ", pulp.value(prob.objective))
 
-        length = angles.convert_distance_to_physical(df['distance'].iloc[inde].sum(), units)
-        return inde, length
+        route_length_deg = map_components['distance'].iloc[segment_index].sum()
+        route_length = angles.convert_distance_to_physical(route_length_deg,
+                                                           units)
+        return segment_index, route_length
 
     def update_costs(self, object_, target_d, d_done, current_point,
                      end_point, weight):
@@ -160,9 +205,6 @@ class RunRouteOptimizer(core.HeavenCore):
             for i in range(len(object_[key_])):
                 temp = list(object_[key_][i])
                 lon, lat = names.name_to_lon_lat(object_[key_][i][1])
-
-                # angular distance to end
-                ang_dist = angles.ang_dist(lon_end, lat_end, lon, lat)
 
                 # cost function
                 dist_ran = temp[2]['distance'] + d_done[current_point]
@@ -255,7 +297,6 @@ class RunRouteOptimizer(core.HeavenCore):
                         continue
 
                     prev_cost = mins_cost.get(v2, None)
-                    prev_dist = calc_dists.get(v2, None)
                     new_cost = cost + c
                     new_d = dist + info_['distance']
                     if prev_cost is None or new_cost < prev_cost:
@@ -270,10 +311,7 @@ class RunRouteOptimizer(core.HeavenCore):
     def define_park_weight(self, df, target_d):
         """
         """
-        ret = []
         weight = (df['min_dist_to_park'] / target_d)**0.5  # **2
-        # weight = (df['min_dist_to_park'] / target_d)**1.0  # **2
-        # weight = (df['min_dist_to_park'] / target_d)**2.0  # **2
         weight.loc[weight > 1.] = 1.
         return weight
 
@@ -361,7 +399,6 @@ class RunRouteOptimizer(core.HeavenCore):
                                      geometries[i].xy[0][index_]])
 
                     # removes values when used
-                    mod = i % 2
                     if i % 2 == 1:
                         vertexes.pop(i)
                         vertexes.pop(i-1)
@@ -380,7 +417,8 @@ class RunRouteOptimizer(core.HeavenCore):
         path.append(end_point.split('_')[::-1])
         return path
 
-    def run(self, pts, target_dist, units='km', type_=1, cost_weights=None):
+    def run(self, route_ends, target_dist, units='km',
+            algorithm_type='dijkstra', cost_weights=None):
         """
         """
         df_proc = self.data_hand.load_processed_data()
@@ -391,8 +429,8 @@ class RunRouteOptimizer(core.HeavenCore):
         intersection_names = list(set(intersection_names))
 
         # get closest intersection to provided points
-        start_point_lon, start_point_lat = names.name_to_lon_lat(pts[0])
-        end_point_lon, end_point_lat = names.name_to_lon_lat(pts[1])
+        start_point_lon, start_point_lat = names.name_to_lon_lat(route_ends[0])
+        end_point_lon, end_point_lat = names.name_to_lon_lat(route_ends[1])
         start_point = locations.get_closest_point_to(start_point_lon,
                                                      start_point_lat,
                                                      intersection_names)
@@ -423,11 +461,13 @@ class RunRouteOptimizer(core.HeavenCore):
         # self.feature_distributions(tree_density_norm, park_weight)
 
         # linear programming solution
-        if type_ == 2:
-            path_indices, d_path = self.int_prog(df_proc, units, start_point,
-                                                 end_point, target_dist,
-                                                 dfs['park'])
-        elif type_ == 1:
+        if algorithm_type == 'integer_programming':
+            path_indices, d_path = self.integer_programming(df_proc,
+                                                            units,
+                                                            (start_point,
+                                                             end_point),
+                                                            target_dist)
+        elif algorithm_type == 'dijkstra':
             # problem information for Dijkstra's algorithm
             edges = []
             new_df3 = copy.deepcopy(df_proc)
@@ -455,8 +495,8 @@ class RunRouteOptimizer(core.HeavenCore):
             # distance, spiral, tree, park, intersection
             if cost_weights is not None:
                 fixed = ~np.isnan(cost_weights)
-                for i in range(len(weights)):
-                    weights[i][fixed] = np.array(cost_weights)[fixed]
+                for weight in weights:
+                    weight[fixed] = np.array(cost_weights)[fixed]
                 weights = [list(i) for i in weights]
 
                 # remove duplicates
@@ -486,11 +526,10 @@ class RunRouteOptimizer(core.HeavenCore):
                 cost_list.append(opt_path[0])
                 # print(weight, cost_list[-1], d_path)
 
-            n = np.argmin(abs(np.array(d_path_list) - target_dist))
-            # n = np.argmin(cost_list)
-            # print(n, weights[n])
-            d_path = d_path_list[n]
-            path_indices = path_indices_list[n]
+            distance_difference = abs(np.array(d_path_list) - target_dist)
+            index_closest_distance = np.argmin(distance_difference)
+            d_path = d_path_list[index_closest_distance]
+            path_indices = path_indices_list[index_closest_distance]
         else:
             exit('Analysis types 1 and 2 defined so far.')
 
@@ -511,26 +550,24 @@ class RunRouteOptimizer(core.HeavenCore):
         return d_path, route_lon_lat, df_proc.iloc[path_indices]
 
 if __name__ == "__main__":
-    # pt1 = Lexington Ave & E 61st St, New York, NY 10065
-    # pt2 = Park Ave & E 79th St, New York, NY 10075
-    # pts = ('-73.967_40.763', '-73.963_40.772')  # SE NE of CP
-    # pts = ('-73.963_40.772', '-73.967_40.763')
-    # pts = ('-73.994_40.740', '-73.995_40.749')
+    # ROUTE_ENDS = ('-73.967_40.763', '-73.963_40.772')  # SE NE of CP
+    # ROUTE_ENDS = ('-73.963_40.772', '-73.967_40.763')
+    # ROUTE_ENDS = ('-73.994_40.740', '-73.995_40.749')
 
     # central park
-    pts = ('-73.967_40.763', '-73.979_40.777')  # SE to NW of CP
-    # pts = ('-73.967_40.763', '-73.967_40.764')  # SE to SE of CP
+    ROUTE_ENDS = ('-73.967_40.763', '-73.979_40.777')  # SE to NW of CP
+    # ROUTE_ENDS = ('-73.967_40.763', '-73.967_40.764')  # SE to SE of CP
     # loops in central park
-    # pts = ('-73.976_40.766', '-73.980_40.769')  # loop in CP
+    # ROUTE_ENDS = ('-73.976_40.766', '-73.980_40.769')  # loop in CP
 
     # south Mahattan
-    # pts = ('-73.988_40.729', '-73.996_40.722')  #
-    # pts = ('-73.974_40.726', '-73.985_40.7112')  #
+    # ROUTE_ENDS = ('-73.988_40.729', '-73.996_40.722')  #
+    # ROUTE_ENDS = ('-73.974_40.726', '-73.985_40.7112')  #
 
     # one point is sidewalk in Brooklyn
-    # pts=('40.776112_-73.979746', '40.778238_-73.971427')
+    # ROUTE_ENDS=('40.776112_-73.979746', '40.778238_-73.971427')
 
-    cost_weights = [np.nan, np.nan, np.nan, np.nan, np.nan]
+    COST_WEIGHTS = [np.nan, np.nan, np.nan, np.nan, np.nan]
     # cost_weights = [np.nan, np.nan, 0., np.nan, np.nan]
     # cost_weights = [np.nan, np.nan, np.nan, 0., np.nan]
     # cost_weights = [np.nan, np.nan, np.nan, np.nan, 0.]
@@ -539,13 +576,14 @@ if __name__ == "__main__":
     # cost_weights = [np.nan, np.nan, np.nan, 0., 0.]
     # cost_weights = [np.nan, np.nan, 0., 0., 0.]
 
-    target_dist = 3.
+    TARGET_DISTANCE = 3.
 
-    units = 'km'
-    # units = 'miles'
+    UNITS = 'km'
+    # UNITS = 'miles'
 
-    type_ = 1  # Dijkstra's algorithm
-    # type_ = 2  # intger programming, slow and has problems
+    # ALGORITHM_TYPE = 'dijkstra'
+    ALGORITHM_TYPE = 'integer_programming'
 
-    app = RunRouteOptimizer()
-    d = app.run(pts, target_dist, units, type_, cost_weights=cost_weights)
+    APP = RunRouteOptimizer()
+    APP.run(ROUTE_ENDS, TARGET_DISTANCE, UNITS, ALGORITHM_TYPE,
+            cost_weights=COST_WEIGHTS)
