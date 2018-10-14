@@ -22,9 +22,18 @@ Below is an example of a 5 km route through Central Park. Parks (yellow), street
 
 
 # To Run Locally
-  * Download the data (a script will be provided in the near future, but download the data manually from the links below and move the files to running_heaven/raw_data/).
+  * Setup your machine. See below for how to use install.py to set it up.
+  * Download the data. See below for how to use install.py to download the data automatically. The files need to live in running_heaven/raw_data/.
   * Run build_database.py to process the raw data
   * Run route_optimization.py to optimize routes. The arguments are hardcoded for now, but it will be possible to enter them from the command line soon.
+
+# install.py
+The install.py script can be used to install the packages and to download the data.
+  * The package installer expects you use Anaconda
+  * "python install.py" runs both
+  * "python install.py install" only installs the libraries
+  * "python install.py download" only downloads the data
+  * You will be prompted to edit your PYTHONPATH in your .bashrc
 
 # Packages to install
   * python 3 (tested with python 3.6.5)
@@ -32,13 +41,11 @@ Below is an example of a 5 km route through Central Park. Parks (yellow), street
   * scipy
   * pandas
   * matplotlib
-  * flask
   * scikit-learn
   * jupyter
   * seaborn
   * geopandas
   * googlemaps
   * requests
-  * flask (only for web-app)
-  * gunicorn (only for web-app server)
-
+  * flask (only for web-app, required to be installed manually)
+  * gunicorn (only for web-app server, required to be installed manually)
